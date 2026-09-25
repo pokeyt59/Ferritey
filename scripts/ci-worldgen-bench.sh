@@ -122,10 +122,9 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
 MEMO="ferrite worldgen map-memo"
-# Rotated A/B of surface rule pruning. A setup may hold several commands
-# split by ';'.
-SP="ferrite worldgen surface-prune"
-PHASES=${WG_PHASES:-"warmup="}
+# Shipped defaults throughout; the single switches are timed on repeatable
+# work above. A setup may hold several commands split by ';' for A/B phases.
+PHASES=${WG_PHASES:-"warmup=|run-1=|run-2=|run-3=|run-4=|run-5=|run-6="}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.

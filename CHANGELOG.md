@@ -110,6 +110,26 @@ marks pre-release research builds.
   blocks). `/ferrite worldgen lazy-interp on|off|status`,
   `-Dferrite.worldgen.lazyinterp=false`.
 
+- **Surface rules skip the tests that cannot pass in a chunk.** Surface
+  rules are built per chunk, and since 26.1 a biome test whose biomes are
+  all absent from the chunk (or all present) is built as a constant false
+  (or true) condition, but the rule sequence still walked it at every
+  block. Terralith's surface rules are long runs of biome tests, and the
+  surface step, which runs one chunk at a time, was 12-14% of the
+  worldgen workers' time. (Fast Noise's own surface optimisation turns
+  itself off when Biolith is installed.) Now, when a sequence is built,
+  a test on the constant false is left out (it always returns nothing,
+  and a sequence returns its first result) and one on the constant true
+  is replaced by its follow-up rule (the test passes without side
+  effects). The constants are the two lambdas the game's biome test
+  returns, recognised by class. About one rule in five is left out. One
+  sequence in 64 keeps its full list too and every result it gives is
+  compared with the full list's: 280,748 checks in the bench's setup and
+  1,826,840 while exploring, no mismatch. The surface step of whole
+  chunks took 5.84 ms against 6.76 (13.5% less, ahead in all eight
+  rounds, identical blocks). `/ferrite worldgen surface-prune
+  on|off|status`, `-Dferrite.worldgen.surfaceprune=false`.
+
   Together with the noise sampling shortcuts, rotated explore phases
   used 94 ms of worldgen CPU per chunk against 98 without either
   (three pairs; phase-to-phase terrain varies by about 10%).
@@ -292,9 +312,11 @@ marks pre-release research builds.
   Before exploring, it times single switches on work that repeats
   exactly, in rotated rounds, and fails if the output differs:
   `/ferrite bench columns <queries> <rounds> [map-memo|noise-math|lazy-interp]`
-  (terrain height queries) and `/ferrite bench noise <chunks> <rounds>
+  (terrain height queries), `/ferrite bench noise <chunks> <rounds>
   <switch>` (the noise stage of whole chunks through the generator's own
-  fill loop, every block state folded into a per-chunk checksum). The
+  fill loop, every block state folded into a per-chunk checksum) and
+  `/ferrite bench surface <chunks> <rounds>` (the surface step on copies
+  of chunks prepared as the generator leaves them before it). The
   explore phases vary by about 10% from terrain alone, too much to see a
   few percent.
 

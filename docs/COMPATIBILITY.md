@@ -373,12 +373,18 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
     `sampleAndLerp` inside `ImprovedNoise.noise`;
   - lazy interpolation, on the interpolator loops of
     `NoiseChunk.updateForZ`/`updateForX` and the value read in
-    `NoiseChunk$NoiseInterpolator.compute`.
+    `NoiseChunk$NoiseInterpolator.compute`;
+  - surface rule pruning, on the list `SurfaceRules$SequenceRuleSource`
+    builds its sequence from (the game's own sequence and test rules
+    only; other rule types pass through untouched).
 
   All are `require = 0` and stand down if another mod replaces the
   target. Their oracles ran clean with this mod list (the mapping memo
-  over 5.7 million checks, lazy interpolation over 2.5 million, noise
-  sampling over 200,000 per start). Fast Noise replaces `populateNoise`
+  over 5.7 million checks, lazy interpolation over 2.5 million, surface
+  rule pruning over 1.8 million, noise sampling over 200,000 per start).
+  Fast Noise turns its own surface and biome tree optimisations off when
+  Biolith is installed, so the game's surface rules run and pruning
+  applies. Fast Noise replaces `populateNoise`
   and `populateBiomes` with its own loops, which drive the same public
   `NoiseChunk` calls (`updateForY/X/Z`, `getInterpolatedState`), so lazy
   interpolation and the noise sampling shortcuts apply under it too.
