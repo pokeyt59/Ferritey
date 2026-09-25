@@ -17,6 +17,8 @@ import net.minecraft.world.level.block.entity.SmokerBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 
+import me.apika.apikaprobe.compat.LithiumCompat;
+
 /**
  * Single composite gate that suppresses per-tick ticker registration
  * for vanilla block entities whose tick body is provably no-op given
@@ -53,6 +55,9 @@ import net.minecraft.world.level.chunk.LevelChunk;
  *       input do.</li>
  * </ul>
  *
+ * <p>The furnace gate stands down when Lithium's furnace sleeping is
+ * active ({@link LithiumCompat#FURNACE_SLEEPING}).
+ *
  * <p>Add new gates as additional if (beClass == ...) branches inside
  * the redirect handler. Each gate is independent.
  */
@@ -82,6 +87,11 @@ public abstract class WorldChunkBlockEntityTickerGateMixin {
 		if (beClass == FurnaceBlockEntity.class
 				|| beClass == BlastFurnaceBlockEntity.class
 				|| beClass == SmokerBlockEntity.class) {
+			// Lithium sleeps idle furnaces itself; two owners of one ticker
+			// would only rebind it back and forth.
+			if (LithiumCompat.FURNACE_SLEEPING) {
+				return state.getTicker(world, type);
+			}
 			AbstractFurnaceBlockEntity furnace = (AbstractFurnaceBlockEntity) blockEntity;
 			AbstractFurnaceBlockEntityAccessor acc = (AbstractFurnaceBlockEntityAccessor) furnace;
 			if (acc.apikaprobe$getLitTimeRemaining() == 0

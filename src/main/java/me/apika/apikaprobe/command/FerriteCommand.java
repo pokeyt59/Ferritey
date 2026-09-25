@@ -266,6 +266,10 @@ public final class FerriteCommand {
 								.then(Commands.literal("off").executes(FerriteCommand::stageProbeOff))
 								.then(Commands.literal("report").executes(FerriteCommand::stageProbeReport))
 								.then(Commands.literal("reset").executes(FerriteCommand::stageProbeReset))))
+				.then(Commands.literal("prechunk")
+						.then(Commands.literal("on").executes(ctx -> setPrechunk(ctx, true)))
+						.then(Commands.literal("off").executes(ctx -> setPrechunk(ctx, false)))
+						.then(Commands.literal("status").executes(FerriteCommand::prechunkStatus)))
 				.then(Commands.literal("diagnostics")
 						.then(Commands.literal("on").executes(ctx -> setDiagnostics(ctx, "true")))
 						.then(Commands.literal("off").executes(ctx -> setDiagnostics(ctx, "false")))
@@ -538,6 +542,7 @@ public final class FerriteCommand {
 	 * the default tree has operand extraction, this will be true.
 	 */
 	private static int surfaceCompile(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		SurfaceRuleAccess.Result extracted = SurfaceRuleAccess.extract(ctx.getSource().getLevel());
 		if (!extracted.ok()) {
 			String msg = "[surface] compile failed: " + extracted.error();
@@ -608,6 +613,7 @@ public final class FerriteCommand {
 	 * vanilla's tree walk on the same workload.
 	 */
 	private static int enableSurfaceDispatch(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		SurfaceDispatcher.ENABLED = true;
 		String msg = SurfaceValidator.isEnabled()
 				? "[surface-dispatch] enabled — tryApply now routes through bytecode evaluator (validator tree present)"
@@ -635,6 +641,7 @@ public final class FerriteCommand {
 	}
 
 	private static int heightmapParityOn(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		me.apika.apikaprobe.surface.SurfaceHeightmapValidator.ENABLED = true;
 		String msg = "[surface-heightmap-parity] ENABLED — diffing path-A (vanilla per-write trackUpdate) vs path-B (per-column batched) per chunk; requires /ferrite surface dispatch on";
 		sendFeedback(ctx, msg, true);
@@ -666,6 +673,7 @@ public final class FerriteCommand {
 	}
 
 	private static int surfaceValidate(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		SurfaceRuleAccess.Result extracted = SurfaceRuleAccess.extract(ctx.getSource().getLevel());
 		if (!extracted.ok()) {
 			String msg = "[surface-validate] install failed: " + extracted.error();
@@ -705,6 +713,7 @@ public final class FerriteCommand {
 	 * batched path is safe to use against real chunks.
 	 */
 	private static int surfaceBatchTest(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		SurfaceRuleAccess.Result extracted = SurfaceRuleAccess.extract(ctx.getSource().getLevel());
 		if (!extracted.ok()) {
 			sendFeedback(ctx, "[surface-batch] extract failed: " + extracted.error(), false);
@@ -884,6 +893,7 @@ public final class FerriteCommand {
 	}
 
 	private static int worldgenStatus(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		if (!RustBridge.NATIVE_AVAILABLE) {
 			sendFeedback(ctx, "[worldgen] native unavailable — Rust state will never finalize", false);
 			return Command.SINGLE_SUCCESS;
@@ -898,6 +908,7 @@ public final class FerriteCommand {
 	}
 
 	private static int worldgenSample(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		if (!RustBridge.NATIVE_AVAILABLE) {
 			sendFeedback(ctx, "[worldgen] native unavailable", false);
 			return Command.SINGLE_SUCCESS;
@@ -934,18 +945,21 @@ public final class FerriteCommand {
 	}
 
 	private static int worldgenValidate(CommandContext<CommandSourceStack> ctx, int samples) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		String result = WorldgenParity.runParityCheck(samples, 10000);
 		sendFeedback(ctx, result, false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int biomeValidate(CommandContext<CommandSourceStack> ctx, int samples) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		String result = BiomeParity.runParityCheck(samples);
 		sendFeedback(ctx, result, false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int densityValidate(CommandContext<CommandSourceStack> ctx, int samples) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		String result = DensityParity.runAll(ctx.getSource().getServer(), samples);
 		sendFeedback(ctx, result, false);
 		return Command.SINGLE_SUCCESS;
@@ -959,6 +973,7 @@ public final class FerriteCommand {
 	 *  output should match what vanilla's per-block compute would
 	 *  produce; we sample-check 16 random positions for parity. */
 	private static int densityBenchBuffer(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		final String name = "ferrite:terrain/final_density";
 		final int chunkMinX = 0;
 		final int chunkMinZ = 0;
@@ -1036,6 +1051,7 @@ public final class FerriteCommand {
 	}
 
 	private static int densityBenchRegion(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		final String name = "ferrite:terrain/final_density";
 		// Cell-corner grid: 4 × 97 × 4. Y range -64..320 at step 4 = 97
 		// inclusive cell-Y rows. Same shape NoiseChunk would corner-sample.
@@ -1123,6 +1139,7 @@ public final class FerriteCommand {
 	}
 
 	private static int densityDump(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		String name = StringArgumentType.getString(ctx, "name").trim();
 		if (!name.contains(":")) name = "minecraft:" + name;
 		byte[] nameBytes = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -1141,6 +1158,7 @@ public final class FerriteCommand {
 	}
 
 	private static int densitySample(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		String name = StringArgumentType.getString(ctx, "name").trim();
 		if (!name.contains(":")) name = "minecraft:" + name;
 		var pos = ctx.getSource().getPosition();
@@ -1172,11 +1190,13 @@ public final class FerriteCommand {
 	}
 
 	private static int biomeAtPlayer(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		var pos = ctx.getSource().getPosition();
 		return reportBiomeAt(ctx, (int) pos.x(), (int) pos.y, (int) pos.z());
 	}
 
 	private static int biomeAtCoords(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		int x = IntegerArgumentType.getInteger(ctx, "x");
 		int y = IntegerArgumentType.getInteger(ctx, "y");
 		int z = IntegerArgumentType.getInteger(ctx, "z");
@@ -1184,6 +1204,7 @@ public final class FerriteCommand {
 	}
 
 	private static int biomeAtChunk(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		int cx = IntegerArgumentType.getInteger(ctx, "cx");
 		int cz = IntegerArgumentType.getInteger(ctx, "cz");
 		// Center of chunk; y=64 = a stable mid-range height. The biome
@@ -1205,6 +1226,7 @@ public final class FerriteCommand {
 	}
 
 	private static int biomeActual(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		int x = IntegerArgumentType.getInteger(ctx, "x");
 		int y = IntegerArgumentType.getInteger(ctx, "y");
 		int z = IntegerArgumentType.getInteger(ctx, "z");
@@ -1215,11 +1237,13 @@ public final class FerriteCommand {
 	}
 
 	private static int biomeRustAtPlayer(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		var pos = ctx.getSource().getPosition();
 		return reportBiomeRust(ctx, (int) pos.x(), (int) pos.y, (int) pos.z());
 	}
 
 	private static int biomeRustAtCoords(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		int x = IntegerArgumentType.getInteger(ctx, "x");
 		int y = IntegerArgumentType.getInteger(ctx, "y");
 		int z = IntegerArgumentType.getInteger(ctx, "z");
@@ -1276,6 +1300,7 @@ public final class FerriteCommand {
 	 * not chunk data.
 	 */
 	private static int biomePredict(CommandContext<CommandSourceStack> ctx, int radiusBlocks) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		var pos = ctx.getSource().getPosition();
 		int cx = (int) pos.x();
 		int cy = (int) pos.y;
@@ -1337,38 +1362,37 @@ public final class FerriteCommand {
 		return Command.SINGLE_SUCCESS;
 	}
 
+	/**
+	 * The route's MultiNoiseBiomeSource hook named a Yarn-era method
+	 * (getBiome with Climate$MultiNoiseSampler) with require = 0, so under
+	 * Mojmap it never attached and the route never ran. It stays out:
+	 * Biolith places its biomes from getNoiseBiome, and a Rust route in
+	 * front of it would bypass Biolith (and Terralith through it).
+	 */
+	private static final String ROUTE_UNAVAILABLE =
+			"[biome-route] not available in 26.x builds: its biome-source hook never attached,"
+					+ " and routing around vanilla would bypass biome mods such as Biolith";
+
 	private static int biomeRouteOn(CommandContext<CommandSourceStack> ctx) {
-		RustBiomeRouter.ENABLED = true;
-		String line = String.format("[biome-route] ENABLED (router has %d holders)",
-				RustBiomeRouter.size());
-		sendFeedback(ctx, line, false);
-		ExampleMod.LOGGER.info(line);
-		return Command.SINGLE_SUCCESS;
+		sendFeedback(ctx, ROUTE_UNAVAILABLE, false);
+		return 0;
 	}
 
 	private static int biomeRouteOff(CommandContext<CommandSourceStack> ctx) {
 		RustBiomeRouter.ENABLED = false;
-		sendFeedback(ctx, "[biome-route] disabled", false);
+		sendFeedback(ctx, ROUTE_UNAVAILABLE, false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int biomeRouteStatus(CommandContext<CommandSourceStack> ctx) {
-		String line = String.format("[biome-route] enabled=%s holders=%d",
-				RustBiomeRouter.ENABLED, RustBiomeRouter.size());
-		sendFeedback(ctx, line, false);
+		sendFeedback(ctx, ROUTE_UNAVAILABLE, false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int prewarmOn(CommandContext<CommandSourceStack> ctx) {
-		ChunkPrewarmer.ENABLED = true;
-		ChunkPrewarmer.start();
-		// Auto-enable the router so cache hits actually short-circuit vanilla.
-		RustBiomeRouter.ENABLED = true;
-		String line = "[prewarm] ENABLED (router auto-enabled). "
-				+ "Worker pool started; trigger fires per server tick.";
-		sendFeedback(ctx, line, false);
-		ExampleMod.LOGGER.info(line);
-		return Command.SINGLE_SUCCESS;
+		// The prewarm cache is only read by the biome route.
+		sendFeedback(ctx, "[prewarm] not available in 26.x builds: it only feeds the biome route, which is not wired", false);
+		return 0;
 	}
 
 	private static int prewarmOff(CommandContext<CommandSourceStack> ctx) {
@@ -1602,6 +1626,7 @@ public final class FerriteCommand {
 	}
 
 	private static int noiseRustOn(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		RustFinalDensityBufferWrapper.ENABLED = true;
 		sendFeedback(ctx, "[noise-rust] ENABLED — newly-generated chunks bulk-prefill density via Rust (Phase 2). Existing chunks unaffected. Math may drift ~0.02 at sub-cell positions; toggle off if visual artifacts appear.", false);
 		return Command.SINGLE_SUCCESS;
@@ -1619,6 +1644,7 @@ public final class FerriteCommand {
 	}
 
 	private static int noiseRustDiag(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		String bufferLine = RustFinalDensityBufferWrapper.diagSummary();
 		String flatLine = RustFlatCache.diagSummary();
 		ExampleMod.LOGGER.info(bufferLine);
@@ -1636,6 +1662,7 @@ public final class FerriteCommand {
 	}
 
 	private static int biomeCompare(CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		int x = IntegerArgumentType.getInteger(ctx, "x");
 		int y = IntegerArgumentType.getInteger(ctx, "y");
 		int z = IntegerArgumentType.getInteger(ctx, "z");
@@ -1657,6 +1684,7 @@ public final class FerriteCommand {
 
 	private static int aquiferRustOn(
 			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		RustAquiferDispatch.ENABLED = true;
 		String msg = "[aquifer-rust] enabled — wrappers will be constructed for newly-loaded chunks (existing chunks unchanged)";
 		sendFeedback(ctx, msg, true);
@@ -1683,6 +1711,7 @@ public final class FerriteCommand {
 
 	private static int aquiferParityOn(
 			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		WorldgenStateBootstrap.ensureBootstrapped(ctx.getSource().getServer());
 		RustAquiferDispatch.PARITY_MODE = true;
 		String msg = "[aquifer-parity] enabled — every Rust apply will also call vanilla and compare (~2x cost). Mismatches log to [aquifer-parity] tag.";
 		sendFeedback(ctx, msg, true);
@@ -1859,6 +1888,29 @@ public final class FerriteCommand {
 				muted.isEmpty() ? "(none)" : String.join(", ", muted));
 		sendFeedback(ctx, msg, false);
 		ExampleMod.LOGGER.info(msg);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/**
+	 * /ferrite prechunk on|off: movement-predictive chunk tickets ahead of
+	 * moving players. Default off; persisted via FerriteConfig.
+	 */
+	private static int setPrechunk(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, boolean on) {
+		me.apika.apikaprobe.monitor.PreChunkDispatcher.setEnabled(ctx.getSource().getServer(), on);
+		me.apika.apikaprobe.config.FerriteConfig.set(
+				me.apika.apikaprobe.config.FerriteConfig.KEY_PRECHUNK, on, false);
+		String msg = on
+				? "[prechunk] predictive chunk tickets ENABLED (persisted)"
+				: "[prechunk] predictive chunk tickets DISABLED (persisted)";
+		sendFeedback(ctx, msg, true);
+		ExampleMod.LOGGER.info(msg);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	private static int prechunkStatus(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		String msg = "[prechunk] " + (me.apika.apikaprobe.monitor.PreChunkDispatcher.ENABLED ? "ENABLED" : "DISABLED");
+		sendFeedback(ctx, msg, false);
 		return Command.SINGLE_SUCCESS;
 	}
 

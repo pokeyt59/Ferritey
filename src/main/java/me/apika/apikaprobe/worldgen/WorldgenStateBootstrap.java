@@ -25,7 +25,7 @@ import net.minecraft.world.level.Level;
  * worldgen state (see {@code rust/mod/src/worldgen_state.rs} and
  * {@code docs/SEED_DRIVEN_DISPATCH.md}).
  *
- * <p>On overworld load: takes the world seed, walks the
+ * <p>On first use (see {@link #ensureBootstrapped}): takes the world seed, walks the
  * {@code NOISE_PARAMETERS} registry for every named noise, and pushes
  * each {@code (identifier, firstOctave, amplitudes)} tuple to Rust via
  * {@link RustBridge#registerNoiseParameter}. Finalizes once the
@@ -69,17 +69,44 @@ public final class WorldgenStateBootstrap {
 			if (world.dimension() != Level.OVERWORLD) {
 				return;
 			}
-			if (initialized.getAndSet(true)) {
-				return;
+			if (neededAtBoot()) {
+				ensureBootstrapped(server);
+			} else if (!initialized.get()) {
+				// Every consumer is off by default. Building the state walks
+				// every noise, biome and density function in the registries,
+				// modded ones included, so skip it until something asks.
+				ExampleMod.LOGGER.info("[worldgen-init] Rust worldgen state deferred until a worldgen command needs it");
 			}
-			try {
-				bootstrap(server, world);
-			} catch (Throwable t) {
-				ExampleMod.LOGGER.error(
-						"[worldgen-init] bootstrap failed, Rust seed-driven dispatch will be unavailable",
-						t);
-			}
+			runAutopregen(server);
 		});
+	}
+
+	/** Opt-ins that read the state from the first generated chunk. */
+	private static boolean neededAtBoot() {
+		String av = System.getProperty("ferrite.autovalidate");
+		return (av != null && !av.isEmpty())
+				|| Boolean.getBoolean("ferrite.worldgen.eager")
+				|| BulkChunkDensityFill.ENABLED
+				|| BulkInterpolatorFill.ENABLED;
+	}
+
+	/**
+	 * Builds the Rust worldgen state for this server's overworld, once per
+	 * JVM (the Rust side is a process-wide OnceLock). Called on the server
+	 * thread from the overworld LOAD event or from any command that reads
+	 * the state; later calls return immediately.
+	 */
+	public static void ensureBootstrapped(net.minecraft.server.MinecraftServer server) {
+		if (initialized.getAndSet(true)) {
+			return;
+		}
+		try {
+			bootstrap(server, server.overworld());
+		} catch (Throwable t) {
+			ExampleMod.LOGGER.error(
+					"[worldgen-init] bootstrap failed, Rust seed-driven dispatch will be unavailable",
+					t);
+		}
 	}
 
 	private static void bootstrap(net.minecraft.server.MinecraftServer server, ServerLevel world) {
@@ -187,11 +214,15 @@ public final class WorldgenStateBootstrap {
 				ExampleMod.LOGGER.error("[autovalidate] failure", t);
 			}
 		}
+	}
 
-		// One-shot auto-pregen, gated by -Dferrite.autopregen=cx,cz,radius.
-		// Kicks a pregen run at the given chunk coords right after worldgen
-		// state finalize; rate lines land in the log as [ferrite-pregen].
-		// Headless chunks/s measurement without driving an interactive client.
+	/**
+	 * One-shot auto-pregen, gated by -Dferrite.autopregen=cx,cz,radius.
+	 * Kicks a pregen run at the given chunk coords once the overworld has
+	 * loaded; rate lines land in the log as [autopregen].
+	 * Headless chunks/s measurement without driving an interactive client.
+	 */
+	private static void runAutopregen(net.minecraft.server.MinecraftServer server) {
 		String apProp = System.getProperty("ferrite.autopregen");
 		if (apProp != null && !apProp.isEmpty()) {
 			try {

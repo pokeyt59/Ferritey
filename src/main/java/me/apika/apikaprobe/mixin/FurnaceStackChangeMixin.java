@@ -13,6 +13,8 @@ import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 
+import me.apika.apikaprobe.compat.LithiumCompat;
+
 /**
  * Re-evaluates ticker registration whenever the furnace's inventory
  * changes. Pairs with the unified ticker gate mixin: that mixin
@@ -41,6 +43,9 @@ public abstract class FurnaceStackChangeMixin {
 		at = @At("RETURN")
 	)
 	private void apikaprobe$reevalTickerOnStackChange(int slot, ItemStack stack, CallbackInfo ci) {
+		if (LithiumCompat.FURNACE_SLEEPING) {
+			return; // Lithium wakes its own sleeping furnaces
+		}
 		BlockEntity self = (BlockEntity) (Object) this;
 		Level level = self.getLevel();
 		if (!(level instanceof ServerLevel)) {

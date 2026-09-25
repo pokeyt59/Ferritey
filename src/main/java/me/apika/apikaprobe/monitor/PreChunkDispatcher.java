@@ -42,10 +42,17 @@ import net.minecraft.world.level.ChunkPos;
  * Phase 1 is vanilla-ticket-only — no mixin, no Rust. Monitor at
  * [PreChunkMonitor] tracks submission count, inside-view-dist skips, and
  * completion lead times.
+ *
+ * Default off: it never showed a measurable TPS gain (vanilla reaches FULL
+ * in 3-6 ticks however early the ticket lands), and each ticket loads, or
+ * generates, a FULL chunk plus its neighbours up to 16 chunks past view
+ * distance for every moving player. Targets outside the world border are
+ * skipped. /ferrite prechunk on|off, persisted; -Dferrite.prechunk=true
+ * turns it on at boot.
  */
 public final class PreChunkDispatcher {
 
-	public static volatile boolean ENABLED = true;
+	public static volatile boolean ENABLED = Boolean.getBoolean("ferrite.prechunk");
 
 	private static final int MAX_PER_TICK = 4;
 	private static final int DEDUPE_TICKS = 20;
@@ -71,6 +78,18 @@ public final class PreChunkDispatcher {
 				LAST_POS.remove(handler.getPlayer().getUUID()));
 	}
 
+	/** Runtime toggle; turning off drops the tracking state. */
+	public static void setEnabled(MinecraftServer server, boolean on) {
+		ENABLED = on;
+		if (!on) {
+			// Server thread only, same as onTick, so the maps are not racing.
+			server.execute(() -> {
+				LAST_SUBMIT.clear();
+				LAST_POS.clear();
+			});
+		}
+	}
+
 	static int currentViewDistance(MinecraftServer server) {
 		return server.getPlayerList().getViewDistance();
 	}
@@ -88,6 +107,10 @@ public final class PreChunkDispatcher {
 				if (budget <= 0) return;
 				ChunkPos target = predict(player, targetBlocks);
 				if (target == null) continue;
+				if (!world.getWorldBorder().isWithinBounds(new net.minecraft.core.BlockPos(
+						(target.x() << 4) + 8, 0, (target.z() << 4) + 8))) {
+					continue;
+				}
 
 				long key = target.pack();
 				// Sentinel 0L is safe: `now` is a server tick count ≥ 0, so
