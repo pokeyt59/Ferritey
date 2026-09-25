@@ -99,8 +99,6 @@ sleep 45
 # measured window.
 echo "=== height queries ===" | tee -a "$REPORT"
 rcon "ferrite bench columns 100 6" "ferrite worldgen structure-dfu status" | tee -a "$REPORT"
-# Biome lookups for whole chunks with Biolith's search on flat arrays and without.
-rcon "ferrite bench biomes 64 8" "ferrite worldgen biome-search status" | tee -a "$REPORT"
 # Height queries with noise sampling shortcuts and lazy interpolation on and off.
 rcon "ferrite bench columns 100 6 noise-math" "ferrite bench columns 100 6 lazy-interp" \
 	"ferrite worldgen noise-math status" "ferrite worldgen lazy-interp status" | tee -a "$REPORT"
@@ -123,7 +121,6 @@ MEMO="ferrite worldgen map-memo"
 # (BlockingLoadBoost), everything else at its default. The last phase has
 # it on: every run explores the same seed and corridor, and earlier runs
 # froze 0.2-0.9 s there while Roguelike Dungeons waited for chunks.
-BS="ferrite worldgen biome-search"
 LI="ferrite worldgen lazy-interp"
 SB="ferrite worldgen sync-load-boost"
 PHASES=${WG_PHASES:-"warmup=|sb-off-1=$SB off|sb-on-1=$SB on|sb-on-2=|sb-off-2=$SB off|sb-off-3=|sb-on-3=$SB on"}
@@ -161,7 +158,7 @@ for spec in "${phase_list[@]}"; do
 		python3 scripts/pin-threads.py "$GAME_PID" reset "$CPUS"
 	fi
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
-		"ferrite worldgen biome-search status" "ferrite worldgen lazy-interp status" \
+		"ferrite worldgen lazy-interp status" \
 		"ferrite worldgen sync-load-boost status" "ferrite worldgen noise-math status" \
 		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
@@ -229,4 +226,3 @@ fi
 if grep -q 'oracleMismatches=[1-9]' "$REPORT"; then echo "::error::oracle mismatches"; exit 1; fi
 grep -q 'heights differing 0;' "$REPORT" || { echo "::error::no column bench result"; exit 1; }
 if grep -E -q 'heights differing [1-9]' "$REPORT"; then echo "::error::height queries differ with a worldgen switch"; exit 1; fi
-grep -q 'biomes differing 0;' "$REPORT" || echo "::warning::biome lookups differ between the flat and Biolith's search (see the oracle)"

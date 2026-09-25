@@ -74,7 +74,6 @@
 		"NoiseChunkMappingMemoMixin",
 		"RecursiveVisitorMemoMixin",
 		"StructureFixTimingMixin",
-		"BiolithSearchMixin",
 		"LazyInterpolationChunkMixin",
 		"LazyInterpolatorMixin",
 		"ChunkTaskQueueBoostMixin",
