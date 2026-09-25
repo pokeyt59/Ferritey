@@ -269,6 +269,7 @@ jobs:
             bench-server.log
             run/logs/latest.log
             bench.jfr
+            hot-*.txt
           if-no-files-found: ignore
 
   # Auto-publishes a GitHub Release when a tag matching v* is pushed.

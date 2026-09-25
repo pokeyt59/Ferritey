@@ -139,6 +139,28 @@ jcmd "$GAME_PID" JFR.start name=bench settings="$PWD/bench.jfc" \
 echo "JFR recording $((SAMPLES * 5)) s with every optimisation on (unscored)"
 sleep $((SAMPLES * 5 + 5))
 
+# Profile A/B: equal JFR windows on the same server, one switch off per
+# window, for effects smaller than the MSPT noise. "on" is recorded
+# twice to show the window-to-window spread.
+PROFILES=${BENCH_PROFILES:-"on=|brain-off=ferrite ai brain-cache off|pathtype-off=ferrite ai pathtype-bypass off|on-again="}
+PROFILE_SECONDS=${BENCH_PROFILE_SECONDS:-20}
+IFS='|' read -r -a PROFS <<< "$PROFILES"
+for spec in "${PROFS[@]}"; do
+	pname=${spec%%=*}
+	pcmds=${spec#*=}
+	rcon "${on_cmds[@]}" > /dev/null
+	if [ -n "$pcmds" ]; then
+		IFS=';' read -r -a plist <<< "$pcmds"
+		rcon "${plist[@]}" > /dev/null
+	fi
+	sleep 5
+	jcmd "$GAME_PID" JFR.start name="prof-$pname" settings="$PWD/bench.jfc" \
+		duration=${PROFILE_SECONDS}s filename="$PWD/prof-$pname.jfr" > /dev/null
+	echo "JFR profile window $pname"
+	sleep $((PROFILE_SECONDS + 3))
+done
+rcon "${on_cmds[@]}" > /dev/null
+
 run_arm() {
 	local spec=$1 name cmds
 	name=${spec%%=*}
@@ -197,6 +219,42 @@ if [ -f bench.jfr ]; then
 	jfr summary bench.jfr | head -40
 	java scripts/JfrHot.java bench.jfr | tee bench-hot.txt
 fi
+
+echo "=== profile A/B: inclusive server-thread samples per ${PROFILE_SECONDS} s window ==="
+for spec in "${PROFS[@]}"; do
+	pname=${spec%%=*}
+	[ -f "prof-$pname.jfr" ] && java scripts/JfrHot.java "prof-$pname.jfr" > "hot-$pname.txt"
+done
+python3 - "${PROFS[@]}" <<'PY' | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+import re, sys
+methods = [
+    "net.minecraft.world.entity.npc.villager.Villager.tick",
+    "net.minecraft.world.entity.ai.Brain.tick",
+    "net.minecraft.world.entity.ai.Brain.startEachNonRunningBehavior",
+    "net.minecraft.world.level.pathfinder.PathFinder.findPath",
+    "net.minecraft.world.level.pathfinder.PathfindingContext.getPathTypeFromState",
+    "net.minecraft.world.entity.LivingEntity.hasLineOfSight",
+]
+names = [spec.split("=", 1)[0] for spec in sys.argv[1:]]
+table = {}
+for name in names:
+    try:
+        text = open(f"hot-{name}.txt").read()
+    except OSError:
+        continue
+    total = re.search(r"server thread samples: (\d+)", text)
+    incl = text.split("=== inclusive ===", 1)[-1].split("===", 1)[0]
+    counts = {m: 0 for m in methods}
+    for line in incl.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[2] in counts:
+            counts[parts[2]] = int(parts[1])
+    table[name] = (int(total.group(1)) if total else 0, counts)
+labels = ["Villager.tick", "Brain.tick", "Brain.start", "findPath", "getPathType", "lineOfSight"]
+print("%-14s %7s " % ("window", "total") + " ".join("%13s" % l for l in labels))
+for name, (total, counts) in table.items():
+    print("%-14s %7d " % (name, total) + " ".join("%13d" % counts[m] for m in methods))
+PY
 
 # Last, so the numbers above always print: the air-skip mixin is
 # require = 0, so make sure it applied and ran.
