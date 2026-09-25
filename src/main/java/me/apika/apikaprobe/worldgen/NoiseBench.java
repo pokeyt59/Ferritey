@@ -9,9 +9,13 @@ import me.apika.apikaprobe.mixin.NoiseGeneratorFluidAccessor;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import net.minecraft.world.level.chunk.ProtoChunk;
+import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.levelgen.Aquifer;
 import net.minecraft.world.level.levelgen.DensityFunctions;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
@@ -50,8 +54,9 @@ public final class NoiseBench {
 		if (!(generator instanceof NoiseBasedChunkGenerator noise)) return "[noise-bench] not a noise generator";
 		RandomState random = level.getChunkSource().randomState();
 		NoiseGeneratorSettings settings = noise.generatorSettings().value();
-		Aquifer.FluidPicker fluids = ((NoiseGeneratorFluidAccessor) noise).ferrite$globalFluidPicker().get();
+		Aquifer.FluidPicker fluids = ((NoiseGeneratorFluidAccessor) (Object) noise).ferrite$globalFluidPicker().get();
 		NoiseSettings ns = settings.noiseSettings().clampToHeightAccessor(level);
+		PalettedContainerFactory containers = PalettedContainerFactory.create(level.registryAccess());
 		DensityFunctions.BeardifierOrMarker noStructures;
 		try {
 			noStructures = (DensityFunctions.BeardifierOrMarker) Class
@@ -62,12 +67,12 @@ public final class NoiseBench {
 			return "[noise-bench] " + e;
 		}
 		Random rng = new Random(0x401e);
-		int[] xs = new int[chunks];
-		int[] zs = new int[chunks];
+		ProtoChunk[] at = new ProtoChunk[chunks];
 		for (int i = 0; i < chunks; i++) {
 			// Far from spawn and from the explore corridor, spread over many biomes.
-			xs[i] = (20_000 + rng.nextInt(200_000)) & ~15;
-			zs[i] = (-100_000 + rng.nextInt(200_000)) & ~15;
+			// Only the position and height are read (NoiseChunk.forChunk); nothing is written.
+			ChunkPos pos = new ChunkPos((20_000 + rng.nextInt(200_000)) >> 4, (-100_000 + rng.nextInt(200_000)) >> 4);
+			at[i] = new ProtoChunk(pos, UpgradeData.EMPTY, level, containers, null);
 		}
 		Filler filler = new Filler(random, ns, noStructures, settings, fluids);
 		long[][] nanos = new long[2][rounds];
@@ -75,14 +80,14 @@ public final class NoiseBench {
 		try {
 			for (int arm = 0; arm < 2; arm++) {
 				set.accept(arm == 0);
-				for (int i = 0; i < Math.min(chunks, 4); i++) filler.fill(xs[i], zs[i]);
+				for (int i = 0; i < Math.min(chunks, 4); i++) filler.fill(at[i]);
 			}
 			for (int round = 0; round < rounds; round++) {
 				for (int step = 0; step < 2; step++) {
 					int arm = (round + step) % 2;   // 0 = on, 1 = off
 					set.accept(arm == 0);
 					long start = System.nanoTime();
-					for (int i = 0; i < chunks; i++) sums[arm][i] = filler.fill(xs[i], zs[i]);
+					for (int i = 0; i < chunks; i++) sums[arm][i] = filler.fill(at[i]);
 					nanos[arm][round] = System.nanoTime() - start;
 				}
 			}
@@ -108,17 +113,18 @@ public final class NoiseBench {
 	private record Filler(RandomState random, NoiseSettings ns, DensityFunctions.BeardifierOrMarker beardifier,
 			NoiseGeneratorSettings settings, Aquifer.FluidPicker fluids) {
 
-		long fill(int minBlockX, int minBlockZ) {
-			int cellHeight = ns.getCellHeight();
+		long fill(ProtoChunk at) {
+			int minBlockX = at.getPos().getMinBlockX();
+			int minBlockZ = at.getPos().getMinBlockZ();
+			NoiseChunk chunk = NoiseChunk.forChunk(at, random, beardifier, settings, fluids, Blender.empty());
+			NoiseChunkStateInvoker states = (NoiseChunkStateInvoker) (Object) chunk;
+			int cellHeight = states.ferrite$cellHeight();
 			int cellMinY = Mth.floorDiv(ns.minY(), cellHeight);
 			int cellCountY = Mth.floorDiv(ns.height(), cellHeight);
-			NoiseChunk chunk = new NoiseChunk(16 / ns.getCellWidth(), random, minBlockX, minBlockZ, ns, beardifier,
-					settings, fluids, Blender.empty());
-			NoiseChunkStateInvoker states = (NoiseChunkStateInvoker) chunk;
 			BlockState fallback = settings.defaultBlock();
 			long sum = 17;
 			chunk.initializeForFirstCellX();
-			int cellWidth = chunk.cellWidth();
+			int cellWidth = states.ferrite$cellWidth();
 			int cells = 16 / cellWidth;
 			for (int cellX = 0; cellX < cells; cellX++) {
 				chunk.advanceCellX(cellX);
