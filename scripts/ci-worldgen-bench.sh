@@ -99,6 +99,8 @@ sleep 45
 # measured window.
 echo "=== height queries ===" | tee -a "$REPORT"
 rcon "ferrite bench columns 100 6" "ferrite worldgen structure-dfu status" | tee -a "$REPORT"
+# Biome lookups for whole chunks with Biolith's search on flat arrays and without.
+rcon "ferrite bench biomes 64 8" "ferrite worldgen biome-search status" | tee -a "$REPORT"
 
 # Setup (the pen's forceload) stalls the server by design; only later
 # "Can't keep up" warnings are reported.
@@ -114,9 +116,9 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
 MEMO="ferrite worldgen map-memo"
-# Shipped defaults throughout: this run looks for the tick spikes seen late
-# in earlier runs (the whole run is recorded, below).
-PHASES=${WG_PHASES:-"warmup=|run-1=|run-2=|run-3=|run-4=|run-5=|run-6="}
+# Rotated A/B of Biolith's search on flat arrays (BiomeSearch).
+BS="ferrite worldgen biome-search"
+PHASES=${WG_PHASES:-"warmup=|bs-on-1=$BS on|bs-off-1=$BS off|bs-off-2=|bs-on-2=$BS on|bs-on-3=|bs-off-3=$BS off"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -150,6 +152,7 @@ for spec in "${phase_list[@]}"; do
 		python3 scripts/pin-threads.py "$GAME_PID" reset "$CPUS"
 	fi
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
+		"ferrite worldgen biome-search status" \
 		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
@@ -162,8 +165,8 @@ FIRST_LOG=$LOG
 # --- Second start ---------------------------------------------------------------
 # Structure templates were upgraded (DataFixerUpper) and cached during the
 # first start; this start explores fresh terrain once more and reports how
-# many upgrades came from the cache.
-if [ "${WG_RESTART:-1}" = 1 ]; then
+# many upgrades came from the cache. WG_RESTART=1 runs it.
+if [ "${WG_RESTART:-0}" = 1 ]; then
 	LOG=worldgen-server-2.log
 	taskset -c "$CPUS" ./gradlew runServer -x buildRustLib -x copyRustDll "$@" < /dev/null > "$LOG" 2>&1 &
 	PID=$!
@@ -215,3 +218,4 @@ fi
 [ -z "${explore_failed:-}" ] || { echo "::error::exploring failed"; exit 1; }
 if grep -q 'oracleMismatches=[1-9]' "$REPORT"; then echo "::error::oracle mismatches"; exit 1; fi
 grep -q 'heights differing 0;' "$REPORT" || { echo "::error::height queries differ with the mapping memo"; exit 1; }
+grep -q 'biomes differing 0;' "$REPORT" || echo "::warning::biome lookups differ between the flat and Biolith's search (see the oracle)"

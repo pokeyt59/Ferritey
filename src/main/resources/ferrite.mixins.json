@@ -73,7 +73,8 @@
 		"BaseHeightCacheMixin",
 		"NoiseChunkMappingMemoMixin",
 		"RecursiveVisitorMemoMixin",
-		"StructureFixTimingMixin"
+		"StructureFixTimingMixin",
+		"BiolithSearchMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

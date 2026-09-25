@@ -130,6 +130,10 @@ public final class FerriteCommand {
 								.then(Commands.literal("on").executes(ctx -> setMapMemo(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setMapMemo(ctx, false)))
 								.then(Commands.literal("status").executes(ctx -> setMapMemo(ctx, null))))
+						.then(Commands.literal("biome-search")
+								.then(Commands.literal("on").executes(ctx -> setBiomeSearch(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setBiomeSearch(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setBiomeSearch(ctx, null))))
 						.then(Commands.literal("height-cache")
 								.then(Commands.literal("on").executes(ctx -> setHeightCache(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setHeightCache(ctx, false)))
@@ -250,6 +254,16 @@ public final class FerriteCommand {
 													sendFeedback(ctx, me.apika.apikaprobe.worldgen.ColumnBench.run(
 															ctx.getSource().getLevel(),
 															IntegerArgumentType.getInteger(ctx, "queries"),
+															IntegerArgumentType.getInteger(ctx, "rounds")), false);
+													return Command.SINGLE_SUCCESS;
+												}))))
+						.then(Commands.literal("biomes")
+								.then(Commands.argument("chunks", IntegerArgumentType.integer(1, 100000))
+										.then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
+												.executes(ctx -> {
+													sendFeedback(ctx, me.apika.apikaprobe.worldgen.BiomeBench.run(
+															ctx.getSource().getLevel(),
+															IntegerArgumentType.getInteger(ctx, "chunks"),
 															IntegerArgumentType.getInteger(ctx, "rounds")), false);
 													return Command.SINGLE_SUCCESS;
 												}))))
@@ -2102,6 +2116,16 @@ public final class FerriteCommand {
 			me.apika.apikaprobe.worldgen.MappingMemo.ENABLED = on;
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.MappingMemo.status(), on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/** /ferrite worldgen biome-search on|off|status: BiomeSearch, for A/B. */
+	private static int setBiomeSearch(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.worldgen.BiomeSearch.ENABLED = on;
+		}
+		sendFeedback(ctx, me.apika.apikaprobe.worldgen.BiomeSearch.status(), on != null);
 		return Command.SINGLE_SUCCESS;
 	}
 
