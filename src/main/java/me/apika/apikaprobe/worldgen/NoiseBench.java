@@ -59,10 +59,13 @@ public final class NoiseBench {
 		PalettedContainerFactory containers = PalettedContainerFactory.create(level.registryAccess());
 		DensityFunctions.BeardifierOrMarker noStructures;
 		try {
-			noStructures = (DensityFunctions.BeardifierOrMarker) Class
+			// The enum is not public, so its public field needs setAccessible.
+			java.lang.reflect.Field instance = Class
 					.forName("net.minecraft.world.level.levelgen.DensityFunctions$BeardifierMarker", true,
 							DensityFunctions.class.getClassLoader())
-					.getField("INSTANCE").get(null);
+					.getField("INSTANCE");
+			instance.setAccessible(true);
+			noStructures = (DensityFunctions.BeardifierOrMarker) instance.get(null);
 		} catch (ReflectiveOperationException e) {
 			return "[noise-bench] " + e;
 		}

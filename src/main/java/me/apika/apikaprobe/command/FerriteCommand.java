@@ -138,14 +138,6 @@ public final class FerriteCommand {
 									return setNoiseMath(ctx, null);
 								}))
 								.then(Commands.literal("status").executes(ctx -> setNoiseMath(ctx, null))))
-						.then(Commands.literal("sync-load-boost")
-								.then(Commands.literal("on").executes(ctx -> setSyncLoadBoost(ctx, true)))
-								.then(Commands.literal("off").executes(ctx -> setSyncLoadBoost(ctx, false)))
-								.then(Commands.literal("reset").executes(ctx -> {
-									me.apika.apikaprobe.worldgen.chunk.BlockingLoadBoost.reset();
-									return setSyncLoadBoost(ctx, null);
-								}))
-								.then(Commands.literal("status").executes(ctx -> setSyncLoadBoost(ctx, null))))
 						.then(Commands.literal("lazy-interp")
 								.then(Commands.literal("on").executes(ctx -> setLazyInterp(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setLazyInterp(ctx, false)))
@@ -2153,16 +2145,6 @@ public final class FerriteCommand {
 			me.apika.apikaprobe.worldgen.NoiseMath.ENABLED = on;
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.NoiseMath.status(), on != null);
-		return Command.SINGLE_SUCCESS;
-	}
-
-	/** /ferrite worldgen sync-load-boost on|off|reset|status: BlockingLoadBoost, for A/B. */
-	private static int setSyncLoadBoost(
-			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
-		if (on != null) {
-			me.apika.apikaprobe.worldgen.chunk.BlockingLoadBoost.ENABLED = on;
-		}
-		sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.BlockingLoadBoost.status(), on != null);
 		return Command.SINGLE_SUCCESS;
 	}
 

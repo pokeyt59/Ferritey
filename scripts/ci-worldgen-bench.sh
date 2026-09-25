@@ -120,19 +120,11 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
 MEMO="ferrite worldgen map-memo"
-# Rotated A/B of moving the chunks the server thread waits for ahead
-# (BlockingLoadBoost), everything else at its default. Every run explores
-# the same seed and corridor, and earlier runs froze 0.2-0.9 s in the last
-# phase while Roguelike Dungeons waited for chunks: WG_LAST sets the boost
-# there (on or off), to compare the same waits across runs.
+# Rotated A/B of the noise sampling shortcuts and lazy interpolation
+# together against neither; a setup may hold several commands split by ';'.
+NM="ferrite worldgen noise-math"
 LI="ferrite worldgen lazy-interp"
-SB="ferrite worldgen sync-load-boost"
-LAST=${WG_LAST:-on}
-if [ "$LAST" = on ]; then
-	PHASES=${WG_PHASES:-"warmup=|sb-off-1=$SB off|sb-on-1=$SB on|sb-on-2=|sb-off-2=$SB off|sb-off-3=|sb-on-3=$SB on"}
-else
-	PHASES=${WG_PHASES:-"warmup=|sb-on-1=$SB on|sb-off-1=$SB off|sb-off-2=|sb-on-2=$SB on|sb-on-3=|sb-off-3=$SB off"}
-fi
+PHASES=${WG_PHASES:-"warmup=|new-on-1=$NM on;$LI on|new-off-1=$NM off;$LI off|new-off-2=|new-on-2=$NM on;$LI on|new-on-3=|new-off-3=$NM off;$LI off"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -154,9 +146,9 @@ for spec in "${phase_list[@]}"; do
 		( while sleep 2; do python3 scripts/pin-threads.py "$GAME_PID" split "$CPUS"; done ) &
 		pinner=$!
 	elif [ -n "$setup" ]; then
-		rcon "$setup" > /dev/null
+		IFS=';' read -r -a setup_cmds <<< "$setup"
+		rcon "${setup_cmds[@]}" > /dev/null
 	fi
-	rcon "ferrite worldgen sync-load-boost reset" > /dev/null
 	echo "[$label] starts at $(date -u +%H:%M:%S) UTC" | tee -a "$REPORT"
 	[ -n "$recorded" ] || jcmd "$GAME_PID" JFR.start name=worldgen settings="$PWD/worldgen.jfc" filename="$PWD/worldgen.jfr" > /dev/null
 	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
@@ -168,7 +160,7 @@ for spec in "${phase_list[@]}"; do
 	fi
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
 		"ferrite worldgen lazy-interp status" \
-		"ferrite worldgen sync-load-boost status" "ferrite worldgen noise-math status" \
+		"ferrite worldgen noise-math status" \
 		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
