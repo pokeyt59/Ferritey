@@ -77,7 +77,7 @@ for dim in overworld the_nether; do
 	if echo "$out" | grep -q 'Test failed'; then
 		count=0
 	else
-		count=$(echo "$out" | sed -n 's/.*count: \([0-9]*\).*/\1/p')
+		count=$(echo "$out" | sed -n 's/.*[Cc]ount: \([0-9]*\).*/\1/p')
 	fi
 	[ -n "$count" ] || fail "no husk count for $dim"
 	[ "$count" -lt "$PILE" ] || fail "no cramming deaths in $dim ($count of $PILE husks left)"
