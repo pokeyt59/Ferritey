@@ -37,6 +37,7 @@
 		"EntitySectionCallbackMixin",
 		"EntitySectionMixin",
 		"EntitySectionStorageMixin",
+		"EntitySectionOriginMixin",
 		"TransientEntitySectionCallbackMixin",
 		"GoalSelectorMixin",
 		"MoveControlMixin",

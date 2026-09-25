@@ -266,6 +266,11 @@ public final class FerriteCommand {
 								.then(Commands.literal("off").executes(FerriteCommand::stageProbeOff))
 								.then(Commands.literal("report").executes(FerriteCommand::stageProbeReport))
 								.then(Commands.literal("reset").executes(FerriteCommand::stageProbeReset))))
+				.then(Commands.literal("diagnostics")
+						.then(Commands.literal("on").executes(ctx -> setDiagnostics(ctx, "true")))
+						.then(Commands.literal("off").executes(ctx -> setDiagnostics(ctx, "false")))
+						.then(Commands.literal("auto").executes(ctx -> setDiagnostics(ctx, null)))
+						.then(Commands.literal("status").executes(FerriteCommand::diagnosticsStatus)))
 				.then(Commands.literal("log")
 						.then(Commands.literal("monitors")
 								.then(Commands.literal("on").executes(FerriteCommand::logMonitorsOn))
@@ -288,7 +293,7 @@ public final class FerriteCommand {
 		CrammingDispatcher.ENABLED = true;
 		me.apika.apikaprobe.config.FerriteConfig.set(
 				me.apika.apikaprobe.config.FerriteConfig.KEY_CRAMMING, true, true);
-		String msg = "[cramming] Ferrite cramming enabled — batched Rust path active (vanilla cramming damage NOT applied)";
+		String msg = "[cramming] Ferrite cramming enabled — batched Rust path active (cramming damage still applied per mob)";
 		sendFeedback(ctx, msg, true);
 		ExampleMod.LOGGER.info(msg);
 		return Command.SINGLE_SUCCESS;
@@ -1717,7 +1722,8 @@ public final class FerriteCommand {
 			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
 		FerriteDispatcherProbe.ENABLED = true;
 		FerriteDispatcherProbe.resetDiag();
-		String msg = "[ferrite/dispatcher-probe] enabled (samples reset; status with /ferrite probe dispatcher status)";
+		String msg = "[ferrite/dispatcher-probe] enabled (samples reset; status with /ferrite probe dispatcher status)"
+				+ leanHint();
 		sendFeedback(ctx, msg, true);
 		ExampleMod.LOGGER.info(msg);
 		return Command.SINGLE_SUCCESS;
@@ -1744,7 +1750,8 @@ public final class FerriteCommand {
 			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
 		ChunkStageTiming.ENABLED = true;
 		ChunkStageTiming.reset();
-		String msg = "[ferrite/stage-probe] enabled (samples reset; report with /ferrite probe stages report)";
+		String msg = "[ferrite/stage-probe] enabled (samples reset; report with /ferrite probe stages report)"
+				+ leanHint();
 		sendFeedback(ctx, msg, true);
 		ExampleMod.LOGGER.info(msg);
 		return Command.SINGLE_SUCCESS;
@@ -1798,7 +1805,7 @@ public final class FerriteCommand {
 		me.apika.apikaprobe.monitor.MonitorLog.ENABLED = true;
 		me.apika.apikaprobe.config.FerriteConfig.setString(
 				me.apika.apikaprobe.config.FerriteConfig.KEY_LOG_MONITORS, "true");
-		String msg = "[log] monitor reports ENABLED";
+		String msg = "[log] monitor reports ENABLED" + leanHint();
 		sendFeedback(ctx, msg, true);
 		ExampleMod.LOGGER.info(msg);
 		return Command.SINGLE_SUCCESS;
@@ -1862,6 +1869,43 @@ public final class FerriteCommand {
 		String msg = String.format("[log] monitors=%s muted=%s",
 				me.apika.apikaprobe.monitor.MonitorLog.ENABLED ? "ENABLED" : "DISABLED",
 				muted.isEmpty() ? "(none)" : String.join(", ", muted));
+		sendFeedback(ctx, msg, false);
+		ExampleMod.LOGGER.info(msg);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/** Suffix for commands whose data comes from hooks lean mode skipped. */
+	private static String leanHint() {
+		return me.apika.apikaprobe.monitor.MonitorLog.LEAN
+				? " (lean mode: timing hooks are not installed, so most readings stay at zero;"
+						+ " /ferrite diagnostics on, then restart)"
+				: "";
+	}
+
+	/**
+	 * /ferrite diagnostics on|off|auto. Saved for the next launch: the
+	 * timing mixins are chosen before the game loads, so a restart applies
+	 * it. auto = lean when spark is installed.
+	 */
+	private static int setDiagnostics(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, String value) {
+		me.apika.apikaprobe.config.FerriteConfig.setString(
+				me.apika.apikaprobe.config.FerriteConfig.KEY_DIAGNOSTICS, value);
+		String msg = String.format("[diagnostics] saved %s; takes effect after a restart (now: %s)",
+				value == null ? "auto (lean when spark is installed)" : (value.equals("true") ? "on" : "off"),
+				me.apika.apikaprobe.monitor.MonitorLog.LEAN ? "lean" : "full");
+		sendFeedback(ctx, msg, true);
+		ExampleMod.LOGGER.info(msg);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	private static int diagnosticsStatus(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		String saved = me.apika.apikaprobe.config.FerriteConfig.get(
+				me.apika.apikaprobe.config.FerriteConfig.KEY_DIAGNOSTICS);
+		String msg = String.format("[diagnostics] running=%s saved=%s override=%s",
+				me.apika.apikaprobe.monitor.MonitorLog.LEAN ? "lean" : "full",
+				saved == null ? "auto" : saved,
+				System.getProperty("ferrite.diagnostics", "none"));
 		sendFeedback(ctx, msg, false);
 		ExampleMod.LOGGER.info(msg);
 		return Command.SINGLE_SUCCESS;

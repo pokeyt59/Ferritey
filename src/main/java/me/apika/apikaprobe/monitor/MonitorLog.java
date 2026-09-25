@@ -9,10 +9,10 @@ import org.slf4j.LoggerFactory;
  * runtime flag can silence the whole class of log noise without touching
  * one-shot bootstrap logs or command output.
  *
- * <p>Initial state: enabled, unless {@code -Dferrite.log.monitors.off=true}
- * or the JVM max heap is 3 GB or less (Pi-class hardware with slow SD-card
- * I/O should not pay ~5 log lines/sec by default; the boot stamp says which
- * default applied).  Runtime toggle via {@code /ferrite log monitors
+ * <p>Initial state: enabled, unless {@code -Dferrite.log.monitors.off=true},
+ * the JVM max heap is 3 GB or less (Pi-class hardware with slow SD-card
+ * I/O should not pay ~5 log lines/sec by default), or lean mode skipped the
+ * timing hooks (see {@link #LEAN}); the boot stamp says which default applied.  Runtime toggle via {@code /ferrite log monitors
  * on|off|status}; {@code -Dferrite.log.monitors.on=true} forces on
  * regardless of heap.  Individual categories mute via {@code /ferrite log
  * <category> off}, matched against the leading {@code [tag]} of each line.
@@ -30,12 +30,19 @@ public final class MonitorLog {
 	public static final boolean SMALL_HEAP =
 			Runtime.getRuntime().maxMemory() <= SMALL_HEAP_BYTES;
 
+	/**
+	 * True when FerriteMixinPlugin skipped the timing-only mixins (spark
+	 * present, or diagnostics=false). The per-tick reports would read zero.
+	 */
+	public static final boolean LEAN = "false".equals(
+			System.getProperty(me.apika.apikaprobe.FerriteMixinPlugin.DIAGNOSTICS_PROPERTY));
+
 	public static volatile boolean ENABLED = initialState();
 
 	private static boolean initialState() {
 		if (Boolean.getBoolean("ferrite.log.monitors.off")) return false;
 		if (Boolean.getBoolean("ferrite.log.monitors.on")) return true;
-		return !SMALL_HEAP;
+		return !SMALL_HEAP && !LEAN;
 	}
 
 	private static final Logger L = LoggerFactory.getLogger("ferrite");

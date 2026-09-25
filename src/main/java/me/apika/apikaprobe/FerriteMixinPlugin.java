@@ -1,6 +1,12 @@
 package me.apika.apikaprobe;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 
 import org.objectweb.asm.tree.ClassNode;
@@ -21,16 +27,90 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 			"me.apika.apikaprobe.mixin.ThreadedLevelLightEngineMixin",
 			"me.apika.apikaprobe.mixin.LightTimingMixin");
 
+	// Timing-only hooks. They feed the periodic monitor reports and nothing
+	// else, so lean mode (diagnostics off) skips them at load.
+	private static final String P = "me.apika.apikaprobe.mixin.";
+	private static final Set<String> TIMING_MIXINS = Set.of(
+			P + "WorldTickMixin", P + "ServerWorldTickMixin", P + "EntityCategoryMixin",
+			P + "MonsterBaseTickMixin", P + "MonsterMovementMixin", P + "MonsterMobTickMixin",
+			P + "CrammingMixin", P + "BlockCollisionMixin", P + "NavigatorTickMixin",
+			P + "EntityMoveMixin", P + "TravelMixin", P + "GravityMixin",
+			P + "AdjustCollisionsMixin", P + "TickHandSwingMixin", P + "TickNewAiMixin",
+			P + "ActiveTargetGoalMixin", P + "GoalSelectorMixin", P + "MoveControlMixin",
+			P + "LookControlMixin", P + "ServerTickPhaseMixin",
+			P + "ThreadedLevelLightEngineMixin", P + "LightTimingMixin",
+			P + "ChunkDecoratorTimingMixin", P + "FerriteDispatcherProbeMixin",
+			P + "AbstractConsecutiveExecutorDurationMixin", P + "ChunkStageTimingMixin",
+			P + "RedstoneWireMixin", P + "RedstoneGateMixin", P + "DefaultRedstoneControllerMixin",
+			P + "EntitySectionStorageMixin");
+
+	// Also carries the opt-in nav-cache path parity check.
+	private static final String PATH_FINDER_MIXIN = P + "PathFinderMixin";
+
+	// Hooks for the Rust physics port. Nothing sets PhysicsDispatcher.ENABLED
+	// or PARITY_MODE, so they stay out unless -Dferrite.physics.hooks=true.
+	private static final Set<String> PHYSICS_MIXINS = Set.of(
+			P + "MovementRedirectMixin", P + "PhysicsPreTickMixin", P + "EntityAdjustInvoker");
+
+	/** System property the mod reads to learn which mode the plugin chose. */
+	public static final String DIAGNOSTICS_PROPERTY = "ferrite.diagnostics.effective";
+
 	private boolean moonrise;
 	private boolean logged;
+	private boolean diagnostics;
+	private boolean navParity;
+	private boolean physicsHooks;
 
 	@Override
 	public void onLoad(String mixinPackage) {
-		this.moonrise = FabricLoader.getInstance().isModLoaded("moonrise");
+		FabricLoader loader = FabricLoader.getInstance();
+		this.moonrise = loader.isModLoaded("moonrise");
+		this.navParity = Boolean.parseBoolean(System.getProperty("ferrite.nav.parity", "false"));
+		this.physicsHooks = Boolean.getBoolean("ferrite.physics.hooks");
+
+		String reason;
+		String prop = System.getProperty("ferrite.diagnostics");
+		String saved = readSavedDiagnostics(loader.getConfigDir().resolve("ferrite.properties"));
+		if (prop != null && !prop.isEmpty()) {
+			diagnostics = Boolean.parseBoolean(prop);
+			reason = "-Dferrite.diagnostics";
+		} else if (saved != null) {
+			diagnostics = Boolean.parseBoolean(saved);
+			reason = "config/ferrite.properties";
+		} else {
+			// spark already profiles the server, so the timing hooks are
+			// redundant weight on every entity tick.
+			diagnostics = !loader.isModLoaded("spark");
+			reason = diagnostics ? "default" : "spark detected";
+		}
+		System.setProperty(DIAGNOSTICS_PROPERTY, Boolean.toString(diagnostics));
+		if (!diagnostics) {
+			LOGGER.info("[ferrite] lean mode ({}): {} timing mixins skipped; -Dferrite.diagnostics=true restores them",
+					reason, TIMING_MIXINS.size() + (navParity ? 0 : 1));
+		}
+	}
+
+	/** Plain Properties read: FerriteConfig pulls in game classes, too early here. */
+	private static String readSavedDiagnostics(Path file) {
+		if (!Files.isRegularFile(file)) return null;
+		Properties props = new Properties();
+		try (Reader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+			props.load(in);
+		} catch (IOException | IllegalArgumentException e) {
+			return null;
+		}
+		return props.getProperty("diagnostics");
 	}
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+		if (!physicsHooks && PHYSICS_MIXINS.contains(mixinClassName)) {
+			return false;
+		}
+		if (!diagnostics && (TIMING_MIXINS.contains(mixinClassName)
+				|| (!navParity && PATH_FINDER_MIXIN.equals(mixinClassName)))) {
+			return false;
+		}
 		if (moonrise && LIGHT_MONITOR_MIXINS.contains(mixinClassName)) {
 			if (!logged) {
 				LOGGER.info("[ferrite] Moonrise detected: light monitor mixins disabled ([light] shows no data)");

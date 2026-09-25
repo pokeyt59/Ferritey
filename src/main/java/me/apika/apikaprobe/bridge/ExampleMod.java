@@ -56,7 +56,7 @@ public class ExampleMod implements ModInitializer {
 		LOGGER.info("Hello Fabric world!");
 		me.apika.apikaprobe.config.FerriteConfig.load();
 		// One-line hardware stamp so shared logs self-describe their host.
-		LOGGER.info("[hw] arch={} cores={} maxHeap={}MB jvm={} native={} monitors={}",
+		LOGGER.info("[hw] arch={} cores={} maxHeap={}MB jvm={} native={} monitors={} diagnostics={}",
 				System.getProperty("os.arch"),
 				Runtime.getRuntime().availableProcessors(),
 				Runtime.getRuntime().maxMemory() / (1024 * 1024),
@@ -64,7 +64,8 @@ public class ExampleMod implements ModInitializer {
 				me.apika.apikaprobe.RustBridge.NATIVE_AVAILABLE,
 				me.apika.apikaprobe.monitor.MonitorLog.ENABLED
 						? "on" : (me.apika.apikaprobe.monitor.MonitorLog.SMALL_HEAP
-								? "off(small-heap)" : "off"));
+								? "off(small-heap)" : "off"),
+				me.apika.apikaprobe.monitor.MonitorLog.LEAN ? "lean" : "full");
 
 		TpsMonitor.register();
 		// NoiseStageMonitor and AquiferMonitor must register BEFORE ChunkGenMonitor

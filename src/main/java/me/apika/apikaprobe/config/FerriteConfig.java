@@ -36,6 +36,8 @@ public final class FerriteConfig {
 	public static final String KEY_REDSTONE_AC = "redstone-ac";
 	public static final String KEY_LOG_MONITORS = "log-monitors";
 	public static final String KEY_LOG_MUTED = "log-muted";
+	/** Read by FerriteMixinPlugin at launch; takes effect on restart. */
+	public static final String KEY_DIAGNOSTICS = "diagnostics";
 
 	private static final Properties STATE = new Properties();
 
@@ -85,7 +87,7 @@ public final class FerriteConfig {
 		for (String key : STATE.stringPropertyNames()) {
 			switch (key) {
 				case KEY_CRAMMING, KEY_HOPPER, KEY_REDSTONE_AC,
-						KEY_LOG_MONITORS, KEY_LOG_MUTED -> {}
+						KEY_LOG_MONITORS, KEY_LOG_MUTED, KEY_DIAGNOSTICS -> {}
 				default -> ExampleMod.LOGGER.warn(
 						"[config] unknown key \"{}\" in {} (ignored)", key, FILE_NAME);
 			}
@@ -100,6 +102,11 @@ public final class FerriteConfig {
 		if (value == defaultValue) STATE.remove(key);
 		else STATE.setProperty(key, Boolean.toString(value));
 		save();
+	}
+
+	/** The saved value of a key, or null when it is at its default. */
+	public static synchronized String get(String key) {
+		return STATE.getProperty(key);
 	}
 
 	/** Records an always-explicit string value; empty removes the key. */
