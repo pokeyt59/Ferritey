@@ -249,6 +249,12 @@ marks pre-release research builds.
   times (mean 72.5 ms, 1.60 s) with it on a runner of the same speed:
   each wait is the generation of a chunk nobody had asked for yet, not
   time in the queue.
+- Tried and dropped: asking for the eight neighbours of a chunk the
+  server thread waits for, so the next chunks such a mod touches would
+  generate in parallel. The same build then waited 5 times but 260 ms
+  each (2.1 s of slow ticks): the neighbours competed with the waited
+  chunk for the one-at-a-time worldgen steps and pulled in neighbours of
+  their own.
 - With Lithium installed, turning the entity query index's queries off
   measured -0.1, +0.1 and +0.7 ms/tick over three runs, so it stays on
   with no consistent gain; the typed grid and the per-section collider

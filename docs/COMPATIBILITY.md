@@ -367,20 +367,32 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   - the height cache, wrapping `NoiseBasedChunkGenerator.getBaseHeight`;
   - the structure template cache, wrapping
     `DataFixTypes.update(DataFixer, CompoundTag, int, int)` for
-    `STRUCTURE` only.
+    `STRUCTURE` only;
+  - the noise sampling shortcuts, redirecting `PerlinNoise.wrap` inside
+    `PerlinNoise.getValue` and `BlendedNoise.compute`, and
+    `sampleAndLerp` inside `ImprovedNoise.noise`;
+  - lazy interpolation, on the interpolator loops of
+    `NoiseChunk.updateForZ`/`updateForX` and the value read in
+    `NoiseChunk$NoiseInterpolator.compute`.
 
-  All three are `require = 0` and stand down if another mod replaces
-  the target. Their oracles ran clean with this mod list (the mapping
-  memo over 5.7 million checks). Fast Noise replaces `populateNoise` and
-  `populateBiomes` itself, and none of these hooks sit on those paths.
+  All are `require = 0` and stand down if another mod replaces the
+  target. Their oracles ran clean with this mod list (the mapping memo
+  over 5.7 million checks, lazy interpolation over 2.5 million, noise
+  sampling over 200,000 per start). Fast Noise replaces `populateNoise`
+  and `populateBiomes` with its own loops, which drive the same public
+  `NoiseChunk` calls (`updateForY/X/Z`, `getInterpolatedState`), so lazy
+  interpolation and the noise sampling shortcuts apply under it too.
 - **Roguelike Dungeons.** It builds each dungeon on the server thread:
   it places blocks with neighbour updates and reads blocks around the
   dungeon, and when those chunks are not generated yet,
   `ServerChunkCache.getChunkBlocking` makes the server thread wait for
-  them. On the CI bench one dungeon froze ticks for 0.2-0.6 s at a time.
-  That is the mod's design, not something Ferrite can speed up exactly.
-  Pregenerating the world (Chunky) moves those stalls to the pregen run,
-  and `/ferrite tickwatch 100` shows them in the log.
+  them. On the CI bench one dungeon waited 10-12 times in a row, about
+  70 ms each, freezing ticks for 1.6-1.9 s in all. Each wait is the
+  generation of a chunk nobody had asked for; putting those chunks first
+  in the queue changed nothing, and asking for their neighbours at the
+  same time made it worse. Pregenerating the world (Chunky) moves those
+  stalls to the pregen run, and `/ferrite tickwatch 100` shows them in
+  the log.
 - **spark.** With spark installed Ferrite runs in lean mode: the
   timing-only mixins are not applied and monitor reports start off.
   `-Dferrite.diagnostics=true` or `/ferrite diagnostics on` (after a

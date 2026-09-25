@@ -122,7 +122,6 @@ public class ExampleMod implements ModInitializer {
 		ChunkPrewarmTrigger.register();
 		ChunkForcer.register();
 		ExploreBench.register();
-		me.apika.apikaprobe.worldgen.chunk.SyncLoadPrefetch.register();
 		if (Boolean.getBoolean("ferrite.affinity.servercore")) ServerCoreAffinity.setEnabled(true);
 		ChunkForceTrigger.register();
 		PregenLifecycle.register();

@@ -138,14 +138,6 @@ public final class FerriteCommand {
 									return setNoiseMath(ctx, null);
 								}))
 								.then(Commands.literal("status").executes(ctx -> setNoiseMath(ctx, null))))
-						.then(Commands.literal("sync-prefetch")
-								.then(Commands.literal("on").executes(ctx -> setSyncPrefetch(ctx, true)))
-								.then(Commands.literal("off").executes(ctx -> setSyncPrefetch(ctx, false)))
-								.then(Commands.literal("reset").executes(ctx -> {
-									me.apika.apikaprobe.worldgen.chunk.SyncLoadPrefetch.reset();
-									return setSyncPrefetch(ctx, null);
-								}))
-								.then(Commands.literal("status").executes(ctx -> setSyncPrefetch(ctx, null))))
 						.then(Commands.literal("lazy-interp")
 								.then(Commands.literal("on").executes(ctx -> setLazyInterp(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setLazyInterp(ctx, false)))
@@ -2153,16 +2145,6 @@ public final class FerriteCommand {
 			me.apika.apikaprobe.worldgen.NoiseMath.ENABLED = on;
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.NoiseMath.status(), on != null);
-		return Command.SINGLE_SUCCESS;
-	}
-
-	/** /ferrite worldgen sync-prefetch on|off|reset|status: SyncLoadPrefetch, for A/B. */
-	private static int setSyncPrefetch(
-			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
-		if (on != null) {
-			me.apika.apikaprobe.worldgen.chunk.SyncLoadPrefetch.ENABLED = on;
-		}
-		sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.SyncLoadPrefetch.status(), on != null);
 		return Command.SINGLE_SUCCESS;
 	}
 
