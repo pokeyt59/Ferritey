@@ -303,12 +303,6 @@ jobs:
           mapfile -t mods < <(grep -v '^#' scripts/worldgen-mods.txt | grep -v '^$')
           python3 scripts/modrinth-fetch.py "$mc" run/mods "${mods[@]}" | tee worldgen-mods-fetched.txt
           ls -1 run/mods
-          # Undeclared library use shows up as class references; name the jars.
-          for j in run/mods/*.jar; do
-            if unzip -p "$j" '*.class' 2>/dev/null | grep -a -q 'com/supermartijn642/'; then
-              echo "references SuperMartijn642's Core Lib: $j"
-            fi
-          done
       - name: worldgen benchmark
         shell: bash
         run: |

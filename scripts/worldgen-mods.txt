@@ -4,10 +4,10 @@
 # Required dependencies are fetched automatically; list a dependency
 # before the mod that needs it to pin its version too. Mods without a
 # build are reported and skipped. Moog's End and Nether structures are
-# left out: this bench explores the Overworld.
-# Referenced by one of the mods below without being declared (the first
-# pinned run failed with NoClassDefFoundError com.supermartijn642...).
-supermartijn642s-core-lib=SuperMartijn642's Core Lib
+# left out: this bench explores the Overworld. Formations (and the
+# SuperMartijn642 Core Lib it needs) is left out: in Loom's dev runtime it
+# starts client-only dev tools and stops a dedicated server at boot, which
+# a production server never does.
 lithium@0.25.2=Lithium
 scalablelux@0.3.0-alpha.0.3=ScalableLux
 fast-noise@1.1.0-beta.4=Fast Noise
@@ -18,7 +18,6 @@ forge-config-api-port@26.2.1=Forge Config API Port
 puzzles-lib@26.2.1=Puzzles Lib
 climate-rivers@26.2.0=Climate Rivers
 deeper-oceans@2.0.1=Deeper Oceans
-formations@1.0.4=Formations
 hopo-better-mineshaft@1.3.7=Hopo Better Mineshaft
 hopo-better-underwater-ruins@1.2.8=Hopo Better Underwater Ruins
 ati-structures@1.4.5=ATi Structures
