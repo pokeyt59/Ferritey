@@ -30,8 +30,9 @@ public abstract class EntitySectionCallbackMixin {
 	@Inject(method = "onMove()V", at = @At("HEAD"))
 	private void ferrite$countMove(CallbackInfo ci) {
 		net.minecraft.core.BlockPos pos = entity.blockPosition();
-		long newKey = SectionPos.asLong(pos);
-		EntityQueryMonitor.onMoveEvent(newKey != currentSectionKey);
+		if (me.apika.apikaprobe.monitor.MonitorLog.ENABLED) {
+			EntityQueryMonitor.onMoveEvent(SectionPos.asLong(pos) != currentSectionKey);
+		}
 		if (me.apika.apikaprobe.spatial.EntityCellIndex.ENABLED
 				&& entity instanceof me.apika.apikaprobe.spatial.CellHolder holder) {
 			long oldPacked = holder.ferrite$packedPos();
@@ -43,8 +44,9 @@ public abstract class EntitySectionCallbackMixin {
 			net.minecraft.world.phys.AABB bb = entity.getBoundingBox();
 			section.ferrite$growExtents(
 					(float) (Math.max(bb.getXsize(), bb.getZsize()) * 0.5), (float) bb.getYsize());
+			// Same block, same 4x4x4 cell: skip the grid's index lookup.
 			me.apika.apikaprobe.spatial.SectionGrid grid = section.ferrite$grid();
-			if (grid != null) {
+			if (grid != null && newPacked != oldPacked) {
 				grid.onMove(entity, oldPacked, newPacked);
 			}
 		}

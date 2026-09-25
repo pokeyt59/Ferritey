@@ -38,7 +38,7 @@ public abstract class TransientEntitySectionCallbackMixin {
 			section.ferrite$growExtents(
 					(float) (Math.max(bb.getXsize(), bb.getZsize()) * 0.5), (float) bb.getYsize());
 			me.apika.apikaprobe.spatial.SectionGrid grid = section.ferrite$grid();
-			if (grid != null) {
+			if (grid != null && newPacked != oldPacked) {
 				grid.onMove(entity, oldPacked, newPacked);
 			}
 		}
