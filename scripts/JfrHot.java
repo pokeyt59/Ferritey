@@ -60,7 +60,9 @@ public class JfrHot {
 		System.out.println("server thread samples: " + total);
 		if (total == 0) return;
 		dump("self (top frame)", self, total, 45, n -> true);
-		dump("inclusive", incl, total, 100, n -> true);
+		// Optional second argument: how many inclusive entries to print.
+		int inclusiveLimit = args.length > 1 ? Integer.parseInt(args[1]) : 100;
+		dump("inclusive", incl, total, inclusiveLimit, n -> true);
 		dump("ferrite frames, inclusive", incl, total, 40, n -> n.startsWith("me.apika."));
 
 		System.out.println("\n=== commonest callers of the top self frames ===");

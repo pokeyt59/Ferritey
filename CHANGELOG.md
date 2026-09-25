@@ -33,23 +33,11 @@ marks pre-release research builds.
   answers air at once; every other block, the hit and the miss result are
   computed as vanilla does. Only `LivingEntity.hasLineOfSight` takes this
   path; other rays keep vanilla's (or Lithium's) clip. CI bench (1000
-  husks, 60 villagers behind glass, Lithium): 9.14 ms/tick with the skip,
-  10.21 ms without; in a four-round run 8.92 against 9.34, ahead in every
-  round (a first version that reused vanilla's walk saved 0.5 ms). The
-  oracle compared 180,797 rays with Lithium's clip and found no
+  husks, 60 villagers behind glass, Lithium; five rotated rounds): 0.56
+  ms/tick faster with the skip, ahead in every round by 0.35 to 0.70 ms.
+  The oracle compared 250,371 rays with Lithium's clip and found no
   difference. `/ferrite raycast air-skip on|off|status`,
   `-Dferrite.clip.airskip=false`.
-- **Brain behavior table cache (experimental, off by default).** Every
-  brain tick walks a TreeMap of HashMaps of LinkedHashSets twice (try
-  each stopped behavior of an active activity, then collect the running
-  ones). With `/ferrite ai brain-cache on` (or
-  `-Dferrite.ai.braincache=true`) both loops walk an array copy in the
-  same order, rebuilt after `Brain.addActivity` or `removeAllBehaviors`;
-  active activities and behavior status are still read live, and an
-  oracle rebuilds and compares the copy on 1 in 1024 uses (1,547 checks,
-  no difference). In a same-run profile A/B it cut the behavior start
-  loop by about 15% but not `Brain.tick` as a whole, and MSPT showed no
-  gain, so it ships off.
 - **Path type lookups skip Fabric API's empty hook.** Fabric API's
   content-registries hook sits in `PathfindingContext.getPathTypeFromState`,
   the lookup behind every node a land pathfinder evaluates, ahead of
@@ -60,8 +48,8 @@ marks pre-release research builds.
   the hook. In a same-run profile A/B (equal JFR windows), pathfinding
   took 60-64 samples per window with the shortcut and 95 without, and
   Fabric's hook (64 samples) no longer appears; across runs it fell from
-  5.6-5.8% of the server thread to 3.1-3.3%. The change is below the
-  bench's MSPT noise. `/ferrite ai pathtype-bypass on|off|status`,
+  5.6-5.8% of the server thread to 3.1-3.3%. MSPT: 0.11 ms/tick faster,
+  ahead in 4 of 5 rotated rounds. `/ferrite ai pathtype-bypass on|off|status`,
   `-Dferrite.ai.pathtypebypass=false`.
 - **Lean mode with spark.** When spark is installed, about thirty
   timing-only mixins are left out at launch and monitor reports start
@@ -114,11 +102,14 @@ marks pre-release research builds.
 
 ### Measured
 - On the CI bench, Ferrite's cramming batch against vanilla's
-  `pushEntities`: 8.92 ms/tick against 10.99 ms in a four-round run
-  (ahead in every round by 1.4 to 2.4 ms), and 9.14 against 12.37 and
-  7.94 against 10.09 on other runners (same runner per pair,
-  interleaved arms). With Lithium installed, turning the entity query
-  index's queries off
+  `pushEntities`: 10.07 ms/tick against 13.70 ms over five rotated
+  rounds (ahead in every round by 3.5 to 3.7 ms); earlier runs on other
+  runners gave 1.4 to 3.2 ms.
+- Tried and dropped: a flat copy of each brain's behavior table (for
+  villagers and other brain mobs). It was exact, but measured 0.46
+  ms/tick slower in all five rotated rounds and slower in a same-run
+  profile, so it is not in the build.
+- With Lithium installed, turning the entity query index's queries off
   measured -0.1, +0.1 and +0.7 ms/tick over three runs, so it stays on
   with no consistent gain; the typed grid and the per-section collider
   skip measured within 0.2 ms.

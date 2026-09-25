@@ -8,7 +8,7 @@
 #   town: 60 villagers in a closed pen (brains, POI lookups)
 #   boat: one parked boat, as on any real server (a hard collider in the level)
 # Arms come from BENCH_ARMS: "name=cmd;cmd|name2=cmd" (empty cmd list is
-# allowed). Each arm runs BENCH_ROUNDS times (5), in an order that rotates each round.
+# allowed). Each arm runs BENCH_ROUNDS times (4), in an order that rotates each round.
 # Extra arguments go to gradle.
 set -euo pipefail
 
@@ -17,10 +17,10 @@ REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
 SAMPLES=${BENCH_SAMPLES:-4}
-ROUNDS=${BENCH_ROUNDS:-5}
+ROUNDS=${BENCH_ROUNDS:-4}
 # ON is the shipped defaults; each other arm flips one switch.
-ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on;ferrite ai brain-cache off;ferrite ai pathtype-bypass on"
-BENCH_ARMS=${BENCH_ARMS:-"defaults=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|brain-cache-on=$ON;ferrite ai brain-cache on|pathtype-fabric=$ON;ferrite ai pathtype-bypass off"}
+ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on;ferrite ai pathtype-bypass on"
+BENCH_ARMS=${BENCH_ARMS:-"defaults=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|pathtype-fabric=$ON;ferrite ai pathtype-bypass off"}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
@@ -143,7 +143,7 @@ sleep $((SAMPLES * 5 + 5))
 # Profile A/B: equal JFR windows on the same server, one switch off per
 # window, for effects smaller than the MSPT noise. "defaults" is
 # recorded twice to show the window-to-window spread.
-PROFILES=${BENCH_PROFILES:-"defaults=|brain-cache-on=ferrite ai brain-cache on|pathtype-off=ferrite ai pathtype-bypass off|defaults-again="}
+PROFILES=${BENCH_PROFILES:-"defaults=|pathtype-off=ferrite ai pathtype-bypass off|defaults-again=|clip-off=ferrite raycast air-skip off"}
 PROFILE_SECONDS=${BENCH_PROFILE_SECONDS:-20}
 IFS='|' read -r -a PROFS <<< "$PROFILES"
 for spec in "${PROFS[@]}"; do
@@ -196,8 +196,6 @@ done
 rcon "execute if entity @e[type=minecraft:husk]" "execute if entity @e[type=minecraft:villager]"
 airskip=$(rcon "ferrite raycast air-skip status")
 echo "$airskip"
-braincache=$(rcon "ferrite ai brain-cache status")
-echo "$braincache"
 pathtype=$(rcon "ferrite ai pathtype-bypass status")
 echo "$pathtype"
 rcon "stop" > /dev/null || true
@@ -207,7 +205,7 @@ if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Crit
 	fail "mixin errors in the server log"
 fi
 grep -v 'Rcon:' "$LOG" | grep '\[entity-query-cache\] scanned\|\[collider-skip\] eligible' | tail -8 || true
-if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH\|\[clip-airskip\] MISMATCH\|\[brain-cache\] MISMATCH' "$LOG"; then
+if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH\|\[clip-airskip\] MISMATCH' "$LOG"; then
 	grep 'MISMATCH' "$LOG" | head -5
 	fail "oracle mismatches"
 fi
@@ -228,7 +226,8 @@ fi
 echo "=== profile A/B: inclusive server-thread samples per ${PROFILE_SECONDS} s window ==="
 for spec in "${PROFS[@]}"; do
 	pname=${spec%%=*}
-	[ -f "prof-$pname.jfr" ] && java scripts/JfrHot.java "prof-$pname.jfr" > "hot-$pname.txt"
+	# A long inclusive list, so the methods below are found whatever their rank.
+	[ -f "prof-$pname.jfr" ] && java scripts/JfrHot.java "prof-$pname.jfr" 2000 > "hot-$pname.txt"
 done
 python3 - "${PROFS[@]}" <<'PY' | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 import re, sys
@@ -264,5 +263,4 @@ PY
 # Last, so the numbers above always print: the air-skip mixin is
 # require = 0, so make sure it applied and ran.
 echo "$airskip" | grep -q 'rays=[1-9]' || { echo "::error::raycast air-skip never ran"; exit 1; }
-echo "$braincache" | grep -q 'uses=[1-9]' || { echo "::error::brain cache never ran"; exit 1; }
 echo "$pathtype" | grep -q 'bypassed=[1-9]' || { echo "::error::path type bypass never ran"; exit 1; }
