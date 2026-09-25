@@ -23,6 +23,7 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.UpgradeData;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Aquifer;
 import net.minecraft.world.level.levelgen.DensityFunctions;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -145,6 +146,7 @@ public final class SurfaceBench {
 			for (int i = 0; i < sections.length; i++) copied[i] = sections[i].copy();
 			ProtoChunk chunk = new ProtoChunk(pos, UpgradeData.EMPTY, copied, new ProtoChunkTicks<>(), new ProtoChunkTicks<>(),
 					level, containers, null);
+			chunk.setPersistedStatus(ChunkStatus.NOISE);
 			Heightmap.primeHeightmaps(chunk, EnumSet.of(Heightmap.Types.OCEAN_FLOOR_WG, Heightmap.Types.WORLD_SURFACE_WG));
 			chunk.getOrCreateNoiseChunk(c -> noiseChunk);
 			return chunk;
@@ -159,6 +161,8 @@ public final class SurfaceBench {
 		NoiseChunk nc = chunk.getOrCreateNoiseChunk(
 				c -> NoiseChunk.forChunk(c, random, noStructures, settings, fluids, Blender.empty()));
 		fillNoise(chunk, nc, ns, settings);
+		// Biomes are only read from a chunk that has them (ProtoChunk.getNoiseBiome checks the status).
+		chunk.setPersistedStatus(ChunkStatus.NOISE);
 		LevelChunkSection[] template = new LevelChunkSection[chunk.getSections().length];
 		Set<Holder<Biome>> possible = new HashSet<>();
 		for (int i = 0; i < template.length; i++) {
