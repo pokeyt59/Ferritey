@@ -104,10 +104,11 @@ marks pre-release research builds.
 ### Measured
 - On the CI bench, Ferrite's cramming batch against vanilla's
   `pushEntities`: 9.14 ms/tick against 12.37 ms, and 7.94 against 10.09
-  on another runner (same runner per pair, interleaved arms). The entity
-  query index measured between no gain and 0.7 ms with Lithium installed
-  (index queries off: 9.82 and 7.86 ms); the typed grid and the
-  per-section collider skip measured within 0.2 ms.
+  on another runner (same runner per pair, interleaved arms). With
+  Lithium installed, turning the entity query index's queries off
+  measured -0.1, +0.1 and +0.7 ms/tick over three runs, so it stays on
+  with no consistent gain; the typed grid and the per-section collider
+  skip measured within 0.2 ms.
 
 ### CI
 - Rust tests run on every push, and a headless dedicated-server smoke
