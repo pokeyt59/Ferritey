@@ -24,7 +24,7 @@ CPUS=${WG_CPUS:-0-3}
 START_X=${WG_START_X:-2000}
 WIDTH=${WG_WIDTH:-9}
 STEP=${WG_STEP:-1}
-DURATION=${WG_DURATION:-75}
+DURATION=${WG_DURATION:-60}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
@@ -106,7 +106,8 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 # worldgen workers on the others (scripts/pin-threads.py); anything else
 # is a server command. The first phase is recorded with JFR.
 ISO="ferrite worldgen isolate-server-core"
-PHASES=${WG_PHASES:-"isolated=$ISO on|default=$ISO off|isolated=$ISO on|default=$ISO off"}
+# The first phase warms up the JIT on worldgen code and is not an arm.
+PHASES=${WG_PHASES:-"warmup=$ISO off|isolated=$ISO on|default=$ISO off|default=$ISO off|isolated=$ISO on|isolated=$ISO on|default=$ISO off"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
