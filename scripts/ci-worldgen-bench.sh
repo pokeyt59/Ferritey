@@ -3,7 +3,7 @@
 # run/mods (scripts/worldgen-mods.txt, fetched by the workflow).
 #
 # Stands in for players exploring fresh terrain on a small server: a
-# corridor of forceloaded chunks advances through ungenerated land
+# corridor of chunk tickets advances through ungenerated land
 # (scripts/worldgen-drive.py) while a mob pen keeps the server thread
 # busy. Reports tick time with and without exploring, chunks delivered
 # per second, how far generation falls behind, and, from a JFR recording

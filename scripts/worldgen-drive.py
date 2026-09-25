@@ -8,13 +8,14 @@ Usage:
 baseline: samples /tick query every 5 s and prints tick-time stats.
 
 explore: stands in for a player moving through fresh terrain. Every
-step it forceloads the next column of <width> chunks (z centred on 0) at
-chunk x = start, start+1, ..., and checks with "execute if loaded" which
-requested columns have finished generating. Columns more than KEEP
-behind the head are released once loaded. After <duration> it stops
-advancing and waits (up to DRAIN_MAX s) for the backlog to finish. Prints
-tick-time stats while exploring, chunks delivered per second, and the
-generation lag (how far behind the head the newest finished column was).
+step it requests the next column of <width> chunks (z centred on 0) at
+chunk x = start, start+1, ... with /ferrite bench explore add, which
+loads them through asynchronous tickets the way a player's view does
+(ExploreBench.java; /forceload would load them synchronously and stall
+the server thread). After <duration> it stops advancing and waits (up to
+DRAIN_MAX s) for the backlog to finish. Prints tick-time stats while
+exploring, chunks delivered per second, request-to-loaded latency, and
+the backlog of requested chunks not yet loaded.
 """
 import re
 import socket
@@ -23,7 +24,6 @@ import struct
 import sys
 import time
 
-KEEP = 12
 DRAIN_MAX = 180
 LOGIN, COMMAND = 3, 2
 
@@ -98,44 +98,35 @@ def summarize(label, samples):
     print(line + f"  (n={len(samples)})")
 
 
-def loaded(r, cx):
-    return "passed" in r.cmd(f"execute if loaded {cx * 16 + 8} 64 8").lower()
+STATUS = re.compile(r"requested=(\d+) done=(\d+) failed=(\d+) latency_ms median=(\d+) p90=(\d+) max=(\d+)")
 
 
-def column_cmd(verb, cx, width):
-    z0 = -(width // 2)
-    z1 = z0 + width - 1
-    return f"forceload {verb} {cx * 16} {z0 * 16} {cx * 16} {z1 * 16}"
+def status(r):
+    out = r.cmd("ferrite bench explore status")
+    m = STATUS.search(out)
+    if not m:
+        sys.exit(f"unparsed explore status: {out!r}")
+    return [int(g) for g in m.groups()]
 
 
 def explore(r, start, width, step, duration):
     samples = []
-    added = {}          # column -> time requested
-    done = {}           # column -> seconds from request to loaded
-    released = set()
-    lags = []
+    backlogs = []
     head = start
+    z0 = -(width // 2)
+    z1 = z0 + width - 1
+    r.cmd("ferrite bench explore reset")
     t0 = time.monotonic()
     next_step = t0
     next_sample = t0 + 5
     while time.monotonic() - t0 < duration:
         now = time.monotonic()
         if now >= next_step:
-            r.cmd(column_cmd("add", head, width))
-            added[head] = now
+            r.cmd(f"ferrite bench explore add {head} {z0} {head} {z1}")
             head += 1
             next_step += step
-        # Oldest first: record every column that finished since last time.
-        for cx in sorted(c for c in added if c not in done):
-            if not loaded(r, cx):
-                break
-            done[cx] = time.monotonic() - added[cx]
-        newest = max(done) if done else start - 1
-        lags.append(head - 1 - newest)
-        for cx in sorted(done):
-            if cx < head - KEEP and cx not in released:
-                r.cmd(column_cmd("remove", cx, width))
-                released.add(cx)
+        requested, done, failed = status(r)[:3]
+        backlogs.append(requested - done - failed)
         if now >= next_sample:
             samples.append(tick_query(r))
             next_sample += 5
@@ -143,37 +134,30 @@ def explore(r, start, width, step, duration):
         # gently so the driver itself does not show up in the numbers.
         time.sleep(0.5)
     explore_end = time.monotonic()
-    requested = len(added)
-    while len(done) < requested and time.monotonic() - explore_end < DRAIN_MAX:
-        for cx in sorted(c for c in added if c not in done):
-            if not loaded(r, cx):
-                break
-            done[cx] = time.monotonic() - added[cx]
+    done_while_exploring = status(r)[1]
+    while time.monotonic() - explore_end < DRAIN_MAX:
+        requested, done, failed = status(r)[:3]
+        if done + failed >= requested:
+            break
         time.sleep(0.5)
     drain = time.monotonic() - explore_end
-    for cx in added:
-        if cx not in released:
-            r.cmd(column_cmd("remove", cx, width))
+    requested, done, failed, median, p90, worst = status(r)
 
     summarize("exploring", samples)
     total = time.monotonic() - t0
-    finished = len(done)
-    print(f"requested {requested} columns x {width} = {requested * width} chunks in {duration} s "
+    print(f"requested {requested} chunks ({head - start} columns x {width}) in {duration:.0f} s "
           f"({width / step:.1f} chunks/s asked)")
-    print(f"finished {finished} columns ({finished * width} chunks) in {total:.0f} s "
-          f"(drain {drain:.0f} s): {finished * width / total:.2f} chunks/s delivered")
-    if done:
-        lat = sorted(done.values())
-        print(f"column latency: median {statistics.median(lat):.1f} s  "
-              f"p90 {lat[int(0.9 * (len(lat) - 1))]:.1f} s  max {lat[-1]:.1f} s")
-    if lags:
-        print(f"generation lag behind the head: mean {statistics.mean(lags):.1f} columns, "
-              f"max {max(lags)} columns ({max(lags) * 16} blocks)")
+    print(f"delivered {done_while_exploring} while exploring ({done_while_exploring / duration:.2f} chunks/s), "
+          f"{done} in {total:.0f} s with the drain ({drain:.0f} s): {done / total:.2f} chunks/s; {failed} failed")
+    print(f"chunk latency, request to loaded: median {median} ms  p90 {p90} ms  max {worst} ms")
+    if backlogs:
+        print(f"backlog (requested, not yet loaded): mean {statistics.mean(backlogs):.0f} chunks, "
+              f"max {max(backlogs)} chunks ({max(backlogs) / width:.1f} columns behind the head)")
     for kind, t in sorted(r.times.items()):
         print(f"rcon round trip '{kind}': n={len(t)} median {statistics.median(t) * 1000:.0f} ms "
               f"max {max(t) * 1000:.0f} ms")
-    if finished == 0:
-        sys.exit("no column finished generating")
+    if done == 0:
+        sys.exit("no chunk finished generating")
 
 
 def main():

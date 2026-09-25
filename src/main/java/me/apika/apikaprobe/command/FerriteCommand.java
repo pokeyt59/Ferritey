@@ -15,6 +15,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import me.apika.apikaprobe.worldgen.BiomeParity;
 import me.apika.apikaprobe.worldgen.chunk.ChunkForcer;
 import me.apika.apikaprobe.worldgen.chunk.ChunkPrewarmer;
+import me.apika.apikaprobe.worldgen.chunk.ExploreBench;
 import me.apika.apikaprobe.worldgen.chunk.PregenDriver;
 import me.apika.apikaprobe.worldgen.chunk.PregenProgressListener;
 import me.apika.apikaprobe.entity.CrammingDispatcher;
@@ -204,6 +205,16 @@ public final class FerriteCommand {
 										.then(Commands.argument("seconds", IntegerArgumentType.integer(5, 600))
 												.then(Commands.argument("runsPerArm", IntegerArgumentType.integer(1, 10))
 														.executes(FerriteCommand::arrivalSuiteStart))))))
+				.then(Commands.literal("bench")
+						.then(Commands.literal("explore")
+								.then(Commands.literal("add")
+										.then(Commands.argument("x1", IntegerArgumentType.integer())
+												.then(Commands.argument("z1", IntegerArgumentType.integer())
+														.then(Commands.argument("x2", IntegerArgumentType.integer())
+																.then(Commands.argument("z2", IntegerArgumentType.integer())
+																		.executes(FerriteCommand::exploreBenchAdd))))))
+								.then(Commands.literal("status").executes(FerriteCommand::exploreBenchStatus))
+								.then(Commands.literal("reset").executes(FerriteCommand::exploreBenchReset))))
 				.then(Commands.literal("pregen")
 						.then(Commands.argument("radius", IntegerArgumentType.integer(1, 50))
 								.executes(FerriteCommand::pregenStart))
@@ -1633,6 +1644,25 @@ public final class FerriteCommand {
 		sendFeedback(ctx, "[pregen] request order set to " + o.name().toLowerCase()
 				+ " (applies to the next /ferrite pregen run)", false);
 		return 1;
+	}
+
+	private static int exploreBenchAdd(CommandContext<CommandSourceStack> ctx) {
+		int n = ExploreBench.add(ctx.getSource().getLevel(),
+				IntegerArgumentType.getInteger(ctx, "x1"), IntegerArgumentType.getInteger(ctx, "z1"),
+				IntegerArgumentType.getInteger(ctx, "x2"), IntegerArgumentType.getInteger(ctx, "z2"));
+		sendFeedback(ctx, "[explore-bench] requested " + n + " chunks", false);
+		return n;
+	}
+
+	private static int exploreBenchStatus(CommandContext<CommandSourceStack> ctx) {
+		sendFeedback(ctx, ExploreBench.status(), false);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	private static int exploreBenchReset(CommandContext<CommandSourceStack> ctx) {
+		ExploreBench.reset();
+		sendFeedback(ctx, "[explore-bench] reset", false);
+		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int pregenStatus(CommandContext<CommandSourceStack> ctx) {

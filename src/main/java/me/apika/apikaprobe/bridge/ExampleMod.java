@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import me.apika.apikaprobe.worldgen.chunk.ChunkDecoratorTiming;
 import me.apika.apikaprobe.worldgen.chunk.ChunkForceTrigger;
 import me.apika.apikaprobe.worldgen.chunk.ChunkForcer;
+import me.apika.apikaprobe.worldgen.chunk.ExploreBench;
 import me.apika.apikaprobe.worldgen.chunk.ChunkPrewarmTrigger;
 import me.apika.apikaprobe.worldgen.chunk.ChunkPrewarmer;
 import me.apika.apikaprobe.worldgen.chunk.PregenLifecycle;
@@ -119,6 +120,7 @@ public class ExampleMod implements ModInitializer {
 		LightTimingMonitor.register();
 		ChunkPrewarmTrigger.register();
 		ChunkForcer.register();
+		ExploreBench.register();
 		ChunkForceTrigger.register();
 		PregenLifecycle.register();
 		// Vanilla loaded a chunk: drop our biome prediction for it.
