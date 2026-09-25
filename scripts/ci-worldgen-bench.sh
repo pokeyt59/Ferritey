@@ -127,7 +127,7 @@ MEMO="ferrite worldgen map-memo"
 # there (on or off), to compare the same waits across runs.
 LI="ferrite worldgen lazy-interp"
 SB="ferrite worldgen sync-load-boost"
-LAST=${WG_LAST:-off}
+LAST=${WG_LAST:-on}
 if [ "$LAST" = on ]; then
 	PHASES=${WG_PHASES:-"warmup=|sb-off-1=$SB off|sb-on-1=$SB on|sb-on-2=|sb-off-2=$SB off|sb-off-3=|sb-on-3=$SB on"}
 else
