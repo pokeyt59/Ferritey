@@ -143,7 +143,12 @@ public final class SurfaceBench {
 
 		ProtoChunk copy(ServerLevel level, PalettedContainerFactory containers) {
 			LevelChunkSection[] copied = new LevelChunkSection[sections.length];
-			for (int i = 0; i < sections.length; i++) copied[i] = sections[i].copy();
+			for (int i = 0; i < sections.length; i++) {
+				// Through the public constructor and a block count, as the game builds sections it
+				// loads: that is also where Lithium sets up its per-section data.
+				copied[i] = new LevelChunkSection(sections[i].getStates().copy(), sections[i].getBiomes().copy());
+				copied[i].recalcBlockCounts();
+			}
 			ProtoChunk chunk = new ProtoChunk(pos, UpgradeData.EMPTY, copied, new ProtoChunkTicks<>(), new ProtoChunkTicks<>(),
 					level, containers, null);
 			chunk.setPersistedStatus(ChunkStatus.NOISE);
