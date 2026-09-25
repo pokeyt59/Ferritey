@@ -144,7 +144,7 @@ public abstract class EntitySectionMixin implements SectionExtents {
 			at = @At("HEAD"), cancellable = true)
 	private void ferrite$filteredPlain(AABB bb, AbortableIterationConsumer<EntityAccess> consumer,
 			CallbackInfoReturnable<AbortableIterationConsumer.Continuation> cir) {
-		if (!EntityCellIndex.ENABLED) return;
+		if (!EntityCellIndex.ENABLED || !EntityCellIndex.QUERIES) return;
 		java.util.List<EntityAccess> list = ferrite$list();
 		me.apika.apikaprobe.spatial.SectionGrid grid = ferrite$readyGrid(list);
 		if (grid != null) {
@@ -247,7 +247,7 @@ public abstract class EntitySectionMixin implements SectionExtents {
 			at = @At("HEAD"), cancellable = true)
 	private void ferrite$filteredTyped(EntityTypeTest type, AABB bb, AbortableIterationConsumer consumer,
 			CallbackInfoReturnable<AbortableIterationConsumer.Continuation> cir) {
-		if (!EntityCellIndex.ENABLED) return;
+		if (!EntityCellIndex.ENABLED || !EntityCellIndex.QUERIES) return;
 		Collection<? extends EntityAccess> found = storage.find(type.getBaseClass());
 		EntityCellIndex.typedQueries++;
 		if (found.isEmpty()) {

@@ -267,6 +267,10 @@ public final class FerriteCommand {
 								.then(Commands.literal("report").executes(FerriteCommand::stageProbeReport))
 								.then(Commands.literal("reset").executes(FerriteCommand::stageProbeReset))))
 				.then(Commands.literal("entityquery")
+						.then(Commands.literal("index")
+								.then(Commands.literal("on").executes(ctx -> setEntityIndex(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setEntityIndex(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setEntityIndex(ctx, null))))
 						.then(Commands.literal("typed-grid")
 								.then(Commands.literal("on").executes(ctx -> setTypedGrid(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setTypedGrid(ctx, false)))
@@ -1902,6 +1906,23 @@ public final class FerriteCommand {
 				muted.isEmpty() ? "(none)" : String.join(", ", muted));
 		sendFeedback(ctx, msg, false);
 		ExampleMod.LOGGER.info(msg);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/**
+	 * /ferrite entityquery index on|off|status: whether section entity
+	 * queries go through the index or vanilla's walk. Session only;
+	 * -Dferrite.entityquery.cache=false removes the index at boot.
+	 */
+	private static int setEntityIndex(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.spatial.EntityCellIndex.QUERIES = on;
+		}
+		String msg = String.format("[entity-query-cache] queries=%s (index %s)",
+				me.apika.apikaprobe.spatial.EntityCellIndex.QUERIES ? "on" : "off",
+				me.apika.apikaprobe.spatial.EntityCellIndex.ENABLED ? "loaded" : "disabled at boot");
+		sendFeedback(ctx, msg, on != null);
 		return Command.SINGLE_SUCCESS;
 	}
 

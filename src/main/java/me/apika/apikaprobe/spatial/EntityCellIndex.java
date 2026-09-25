@@ -24,6 +24,14 @@ public final class EntityCellIndex {
 	public static final boolean ENABLED = !"false".equals(System.getProperty("ferrite.entityquery.cache"));
 
 	/**
+	 * Whether section queries go through the index. The per-entity
+	 * position tracking keeps running either way, so switching it back on
+	 * needs no rebuild. /ferrite entityquery index on|off|status toggles it
+	 * for A/B against vanilla's walk (and Lithium's callers above it).
+	 */
+	public static volatile boolean QUERIES = true;
+
+	/**
 	 * Typed queries (getEntitiesOfClass and friends) on a big class bucket
 	 * walk the section grid instead of the whole bucket. Kill switch
 	 * -Dferrite.entityquery.typedgrid=false; /ferrite entityquery typed-grid

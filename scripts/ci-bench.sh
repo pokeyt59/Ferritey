@@ -17,7 +17,8 @@ REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
 SAMPLES=${BENCH_SAMPLES:-8}
-BENCH_ARMS=${BENCH_ARMS:-"all-on=ferrite raycast air-skip on;ferrite cramming on|clip-vanilla=ferrite raycast air-skip off;ferrite cramming on|cramming-vanilla=ferrite raycast air-skip on;ferrite cramming off"}
+ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on"
+BENCH_ARMS=${BENCH_ARMS:-"all-on=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|index-off=$ON;ferrite entityquery index off"}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
