@@ -1,0 +1,23 @@
+# Worldgen-relevant mods from the server this bench models, as
+# "modrinth-slug=Display Name" (the name is searched when the slug has no
+# build for this Minecraft version). Required dependencies are fetched
+# automatically; mods without a build are reported and skipped.
+lithium=Lithium
+scalablelux=ScalableLux
+fast-noise=Fast Noise
+terralith=Terralith
+biolith=Biolith
+lithostitched=Lithostitched
+climate-rivers=Climate Rivers
+deeper-oceans=Deeper Oceans
+formations=Formations
+formations-nether=Formations Nether
+hopo-better-mineshaft=Hopo Better Mineshaft
+hopo-better-underwater-ruins=Hopo Better Underwater Ruins
+moogs-end-structures=MoogsEndStructures
+moogs-nether-structures=MoogsNetherStructures
+ati-structures=ATi Structures
+ati-structures-vanilla-edition=ATi Structures Vanilla Edition
+better-trees=Better Trees
+dungeons-plus=Dungeons+
+roguelike-dungeons=Roguelike Dungeons
