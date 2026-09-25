@@ -24,7 +24,34 @@ marks pre-release research builds.
   without running a batch, so no mob in that dimension got cramming.
   Mobs now fall back to vanilla.
 
+### Added
+- **Keep the server thread on a core of its own** (Linux, opt-in). On a
+  CPU with hyperthreads, chunk generation while players explore puts a
+  worldgen worker on the server thread's physical core, and both run
+  slower. This pins the server thread to the first allowed CPU and the
+  worldgen workers to the other physical cores (`sched_setaffinity`
+  through `java.lang.foreign`, re-applied every two seconds). Other
+  threads are left alone. On the CI worldgen bench (2 cores with 2
+  threads each, 300 mobs, 9 new chunks a second; warm-up phase, then
+  rotated phases), exploring added +0.55 ms/tick with it against +1.12
+  without, and p95 averaged 5.3 against 7.7 ms. It won every pair.
+  Every chunk was still delivered, but later: request-to-loaded p90 was
+  1.9-3.4 s against 0.5-2.0 s. It trades generation speed for tick
+  time, so it stays off. `/ferrite worldgen isolate-server-core
+  on|off|status` (saved), `-Dferrite.affinity.servercore=true`.
+
 ### Changed
+- **Terrain height queries are remembered.** Structure placement asks
+  the generator for terrain heights at every structure start and for
+  terrain-following jigsaw pieces. Each query builds a whole `NoiseChunk`
+  for one column, about 6 ms with Terralith on the CI runner. The answer
+  depends only on the generator, seed state, level height range, column
+  and heightmap type, so a fixed-size table keyed on all of them returns
+  exactly what the query computes. Every 64th hit is recomputed and
+  compared. On the worldgen bench about 1.2 queries per chunk were made
+  and 22-25% hit, around 1% of worldgen CPU.
+  `/ferrite worldgen height-cache on|off|status`,
+  `-Dferrite.worldgen.heightcache=false`.
 - **Mob line-of-sight rays skip air.** Every sight check (target goals,
   brain sensors) is a block-by-block raycast that, for each block, looked
   up the block and fluid, built both shapes and clipped against them; for
@@ -111,6 +138,11 @@ marks pre-release research builds.
   villagers and other brain mobs). It was exact, but measured 0.46
   ms/tick slower in all five rotated rounds and slower in a same-run
   profile, so it is not in the build.
+- Tried and dropped: an index for `NoiseChunk`'s wrap map that hashed
+  each density function node once, from memoized component hashes. It
+  deduplicated exactly as vanilla does (no oracle mismatch in 1,059,786
+  checks, identical heights), but its reflective per-node cost made
+  height queries 2.5 times slower (14.6 against 5.9 ms).
 - With Lithium installed, turning the entity query index's queries off
   measured -0.1, +0.1 and +0.7 ms/tick over three runs, so it stays on
   with no consistent gain; the typed grid and the per-section collider
