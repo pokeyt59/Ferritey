@@ -141,6 +141,11 @@ loom {
 			if (project.findProperty("ferrite.monitorsOn")?.toString() == "true") {
 				vmArg "-Dferrite.log.monitors.on=true"
 			}
+			// -Pferrite.diagnostics=true|false forces full or lean mode (default:
+			// lean when spark is installed).
+			if (project.hasProperty("ferrite.diagnostics")) {
+				vmArg "-Dferrite.diagnostics=${project.property('ferrite.diagnostics')}"
+			}
 		}
 	}
 }
