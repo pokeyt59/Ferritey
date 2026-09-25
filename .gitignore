@@ -65,3 +65,4 @@ logs/
 /1.21.11/
 
 docs/LOCAL_DESIGN.md
+__pycache__/

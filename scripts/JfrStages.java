@@ -46,6 +46,9 @@ public class JfrStages {
 		Map<String, Map<String, Integer>> table = new TreeMap<>();
 		Map<String, Integer> groupTotals = new TreeMap<>();
 		Map<String, Map<String, Integer>> selfByGroup = new TreeMap<>();
+		// Worker self frame -> caller chain -> samples, to tell apart the
+		// callers of generic frames such as Objects.hashCode.
+		Map<String, Map<String, Integer>> workerCallers = new TreeMap<>();
 		Map<String, Integer> otherEntries = new TreeMap<>();
 		List<String> gcPauses = new ArrayList<>();
 		List<long[]> gcNanos = new ArrayList<>();
@@ -95,6 +98,10 @@ public class JfrStages {
 				}
 				groupTotals.merge(group, 1, Integer::sum);
 				selfByGroup.computeIfAbsent(group, k -> new TreeMap<>()).merge(name(frames.get(0)), 1, Integer::sum);
+				if (group.equals("worldgen workers")) {
+					workerCallers.computeIfAbsent(name(frames.get(0)), k -> new TreeMap<>())
+							.merge(callers(frames), 1, Integer::sum);
+				}
 			}
 		}
 		List<String> groups = new ArrayList<>(groupTotals.keySet());
@@ -162,6 +169,42 @@ public class JfrStages {
 				System.out.printf("%6.2f%%  %6d  %s%n", 100.0 * e.getValue() / groupTotals.get(g), e.getValue(), e.getKey());
 			}
 		}
+
+		// Where the workers' hottest frames are called from.
+		Map<String, Integer> workerSelf = selfByGroup.get("worldgen workers");
+		if (workerSelf != null) {
+			System.out.println("\n=== worldgen workers: callers of the top self frames ===");
+			List<Map.Entry<String, Integer>> top = new ArrayList<>(workerSelf.entrySet());
+			top.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+			for (Map.Entry<String, Integer> e : top.subList(0, Math.min(12, top.size()))) {
+				System.out.printf("%6d  %s%n", e.getValue(), e.getKey());
+				List<Map.Entry<String, Integer>> chains = new ArrayList<>(workerCallers.get(e.getKey()).entrySet());
+				chains.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+				for (Map.Entry<String, Integer> c : chains.subList(0, Math.min(3, chains.size()))) {
+					System.out.printf("        %6d  <- %s%n", c.getValue(), c.getKey());
+				}
+			}
+		}
+	}
+
+	/**
+	 * The callers above a sample's top frame, skipping method handle
+	 * plumbing and frames already listed (recursion), and
+	 * stopping after five distinct frames.
+	 */
+	private static String callers(List<RecordedFrame> frames) {
+		StringBuilder sb = new StringBuilder();
+		java.util.Set<String> seen = new java.util.HashSet<>();
+		seen.add(name(frames.get(0)));
+		int found = 0;
+		for (int i = 1; i < frames.size() && found < 5; i++) {
+			String n = name(frames.get(i));
+			if (n.startsWith("java.lang.invoke.") || !seen.add(n)) continue;
+			if (found > 0) sb.append(" <- ");
+			sb.append(n.substring(n.lastIndexOf('.', n.lastIndexOf('.') - 1) + 1));
+			found++;
+		}
+		return sb.toString();
 	}
 
 	private static String group(String thread) {

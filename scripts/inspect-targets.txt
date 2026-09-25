@@ -5,3 +5,8 @@
 net.fabricmc.fabric.api.registry.LandPathTypeRegistry [A-Za-z0-9_$<>]+
 net.minecraft.world.level.pathfinder.PathfindingContext [A-Za-z0-9_$<>]+
 net.minecraft.world.level.pathfinder.PathTypeCache [A-Za-z0-9_$<>]+
+net.minecraft.world.level.levelgen.NoiseChunk <init>|wrap|wrapNew|forChunk|cachedClimateSampler
+net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator iterateNoiseColumn|getBaseHeight|getBaseColumn|createNoiseChunk
+net.minecraft.world.level.levelgen.DensityFunctions$HolderHolder mapAll|hashCode|equals
+net.minecraft.world.level.levelgen.DensityFunctions$Ap2 mapAll|hashCode|create
+net.minecraft.core.Holder$Direct hashCode|equals
