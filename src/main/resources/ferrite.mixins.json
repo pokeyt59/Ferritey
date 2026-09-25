@@ -78,7 +78,9 @@
 		"LazyInterpolationChunkMixin",
 		"LazyInterpolatorMixin",
 		"ChunkTaskQueueBoostMixin",
-		"SyncChunkLoadTrackMixin"
+		"SyncChunkLoadTrackMixin",
+		"ImprovedNoiseMathMixin",
+		"PerlinWrapMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

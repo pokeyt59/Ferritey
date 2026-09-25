@@ -130,6 +130,14 @@ public final class FerriteCommand {
 								.then(Commands.literal("on").executes(ctx -> setMapMemo(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setMapMemo(ctx, false)))
 								.then(Commands.literal("status").executes(ctx -> setMapMemo(ctx, null))))
+						.then(Commands.literal("noise-math")
+								.then(Commands.literal("on").executes(ctx -> setNoiseMath(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setNoiseMath(ctx, false)))
+								.then(Commands.literal("verify").executes(ctx -> {
+									me.apika.apikaprobe.worldgen.NoiseMath.verifyAgain();
+									return setNoiseMath(ctx, null);
+								}))
+								.then(Commands.literal("status").executes(ctx -> setNoiseMath(ctx, null))))
 						.then(Commands.literal("sync-load-boost")
 								.then(Commands.literal("on").executes(ctx -> setSyncLoadBoost(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setSyncLoadBoost(ctx, false)))
@@ -266,9 +274,18 @@ public final class FerriteCommand {
 													sendFeedback(ctx, me.apika.apikaprobe.worldgen.ColumnBench.run(
 															ctx.getSource().getLevel(),
 															IntegerArgumentType.getInteger(ctx, "queries"),
-															IntegerArgumentType.getInteger(ctx, "rounds")), false);
+															IntegerArgumentType.getInteger(ctx, "rounds"), "map-memo"), false);
 													return Command.SINGLE_SUCCESS;
-												}))))
+												})
+												.then(Commands.argument("switch", StringArgumentType.word())
+														.executes(ctx -> {
+															sendFeedback(ctx, me.apika.apikaprobe.worldgen.ColumnBench.run(
+																	ctx.getSource().getLevel(),
+																	IntegerArgumentType.getInteger(ctx, "queries"),
+																	IntegerArgumentType.getInteger(ctx, "rounds"),
+																	StringArgumentType.getString(ctx, "switch")), false);
+															return Command.SINGLE_SUCCESS;
+														})))))
 						.then(Commands.literal("biomes")
 								.then(Commands.argument("chunks", IntegerArgumentType.integer(1, 100000))
 										.then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
@@ -2128,6 +2145,16 @@ public final class FerriteCommand {
 			me.apika.apikaprobe.worldgen.MappingMemo.ENABLED = on;
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.MappingMemo.status(), on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/** /ferrite worldgen noise-math on|off|verify|status: NoiseMath, for A/B. */
+	private static int setNoiseMath(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.worldgen.NoiseMath.ENABLED = on;
+		}
+		sendFeedback(ctx, me.apika.apikaprobe.worldgen.NoiseMath.status(), on != null);
 		return Command.SINGLE_SUCCESS;
 	}
 

@@ -11,15 +11,24 @@ import net.minecraft.world.level.levelgen.RandomState;
 /**
  * /ferrite bench columns: times the generator's height query (the call
  * structure placement makes for every start and many jigsaw pieces; it
- * builds a whole NoiseChunk for one column) with MappingMemo on and off,
- * alternating the order each round, and checks the heights agree. The
- * height cache is off meanwhile, so every query is computed. Runs on the
- * calling thread; for the CI worldgen bench.
+ * builds a whole NoiseChunk for one column) with a worldgen switch on and
+ * off (map-memo by default; noise-math, lazy-interp), alternating the
+ * order each round, and checks the heights agree. The height cache is off
+ * meanwhile, so every query is computed. Runs on the calling thread; for
+ * the CI worldgen bench.
  */
 public final class ColumnBench {
 	private ColumnBench() {}
 
-	public static String run(ServerLevel level, int queries, int rounds) {
+	public static String run(ServerLevel level, int queries, int rounds, String name) {
+		java.util.function.Consumer<Boolean> set;
+		boolean saved;
+		switch (name) {
+			case "map-memo" -> { saved = MappingMemo.ENABLED; set = on -> MappingMemo.ENABLED = on; }
+			case "noise-math" -> { saved = NoiseMath.ENABLED; set = on -> NoiseMath.ENABLED = on; }
+			case "lazy-interp" -> { saved = LazyInterpolation.ENABLED; set = on -> LazyInterpolation.ENABLED = on; }
+			default -> { return "[column-bench] unknown switch " + name + " (map-memo, noise-math, lazy-interp)"; }
+		}
 		ChunkGenerator generator = level.getChunkSource().getGenerator();
 		RandomState random = level.getChunkSource().randomState();
 		Random rng = new Random(0x5eed);
@@ -31,7 +40,6 @@ public final class ColumnBench {
 			xs[i] = 20_000 + rng.nextInt(200_000);
 			zs[i] = -100_000 + rng.nextInt(200_000);
 		}
-		boolean saved = MappingMemo.ENABLED;
 		boolean savedCache = BaseHeightCache.ENABLED;
 		BaseHeightCache.ENABLED = false;
 		long[][] nanos = new long[2][rounds];
@@ -39,15 +47,15 @@ public final class ColumnBench {
 		try {
 			// Warm up both paths.
 			for (int arm = 0; arm < 2; arm++) {
-				MappingMemo.ENABLED = arm == 0;
+				set.accept(arm == 0);
 				for (int i = 0; i < Math.min(queries, 100); i++) {
 					generator.getBaseHeight(xs[i], zs[i], Heightmap.Types.WORLD_SURFACE_WG, level, random);
 				}
 			}
 			for (int round = 0; round < rounds; round++) {
 				for (int step = 0; step < 2; step++) {
-					int arm = (round + step) % 2;   // 0 = memo on, 1 = off
-					MappingMemo.ENABLED = arm == 0;
+					int arm = (round + step) % 2;   // 0 = on, 1 = off
+					set.accept(arm == 0);
 					long start = System.nanoTime();
 					for (int i = 0; i < queries; i++) {
 						heights[arm][i] = generator.getBaseHeight(xs[i], zs[i],
@@ -57,7 +65,7 @@ public final class ColumnBench {
 				}
 			}
 		} finally {
-			MappingMemo.ENABLED = saved;
+			set.accept(saved);
 			BaseHeightCache.ENABLED = savedCache;
 		}
 		int differing = 0;
@@ -71,8 +79,8 @@ public final class ColumnBench {
 		}
 		double on = median(nanos[0]) / 1e3 / queries;
 		double off = median(nanos[1]) / 1e3 / queries;
-		return String.format("[column-bench] queries=%d rounds=%d us/query median: memo on %.1f, off %.1f (%+.1f%%); heights differing %d;%s",
-				queries, rounds, on, off, 100.0 * (on - off) / off, differing, rows);
+		return String.format("[column-bench] queries=%d rounds=%d us/query median: %s on %.1f, off %.1f (%+.1f%%); heights differing %d;%s",
+				queries, rounds, name, on, off, 100.0 * (on - off) / off, differing, rows);
 	}
 
 	private static double median(long[] values) {

@@ -101,6 +101,9 @@ echo "=== height queries ===" | tee -a "$REPORT"
 rcon "ferrite bench columns 100 6" "ferrite worldgen structure-dfu status" | tee -a "$REPORT"
 # Biome lookups for whole chunks with Biolith's search on flat arrays and without.
 rcon "ferrite bench biomes 64 8" "ferrite worldgen biome-search status" | tee -a "$REPORT"
+# Height queries with noise sampling shortcuts and lazy interpolation on and off.
+rcon "ferrite bench columns 100 6 noise-math" "ferrite bench columns 100 6 lazy-interp" \
+	"ferrite worldgen noise-math status" "ferrite worldgen lazy-interp status" | tee -a "$REPORT"
 
 # Setup (the pen's forceload) stalls the server by design; only later
 # "Can't keep up" warnings are reported.
@@ -159,7 +162,7 @@ for spec in "${phase_list[@]}"; do
 	fi
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
 		"ferrite worldgen biome-search status" "ferrite worldgen lazy-interp status" \
-		"ferrite worldgen sync-load-boost status" \
+		"ferrite worldgen sync-load-boost status" "ferrite worldgen noise-math status" \
 		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
@@ -224,5 +227,6 @@ if [ -f worldgen-whole.jfr ]; then
 fi
 [ -z "${explore_failed:-}" ] || { echo "::error::exploring failed"; exit 1; }
 if grep -q 'oracleMismatches=[1-9]' "$REPORT"; then echo "::error::oracle mismatches"; exit 1; fi
-grep -q 'heights differing 0;' "$REPORT" || { echo "::error::height queries differ with the mapping memo"; exit 1; }
+grep -q 'heights differing 0;' "$REPORT" || { echo "::error::no column bench result"; exit 1; }
+if grep -E -q 'heights differing [1-9]' "$REPORT"; then echo "::error::height queries differ with a worldgen switch"; exit 1; fi
 grep -q 'biomes differing 0;' "$REPORT" || echo "::warning::biome lookups differ between the flat and Biolith's search (see the oracle)"
