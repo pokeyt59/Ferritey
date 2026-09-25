@@ -46,6 +46,21 @@ marks pre-release research builds.
   mob phases, pathfinding and light, and no longer box a `Long` per
   entity per tick. The item-frame count no longer walks every entity
   every 5 s while nothing prints it.
+- **Cramming asks `isPushable()` only of mobs that overlap another.** It
+  costs a block lookup (`onClimbable`) and was asked of every loaded mob
+  every tick; Rust only reads it for overlapping pairs. If an
+  overlapping mob is not pushable (climbing, a bat), the batch runs
+  again with its flag cleared, so results are unchanged.
+- **Typed entity queries on large class buckets walk the section grid**
+  instead of the bucket (`/ferrite entityquery typed-grid on|off|status`,
+  `-Dferrite.entityquery.typedgrid=false`).
+- **The collider skip checks hard colliders per entity section.** One
+  parked boat used to stand the skip down for its whole dimension; now
+  only for queries near it (`/ferrite entityquery collider-sections
+  on|off|status`, `-Dferrite.entityquery.collidersections=false`).
+- **The per-move entity index callback does less:** its monitor counts
+  only while reports are on, and the grid moves an entity only when it
+  changes cell.
 
 ### Removed
 - **Hopper extract hint maintenance.** It updated a hint on every
@@ -63,6 +78,14 @@ marks pre-release research builds.
 - Rust tests run on every push, and a headless dedicated-server smoke
   test boots the mod in full and lean mode, fails on mixin errors, and
   checks cramming damage in the Overworld and the Nether.
+- **Benchmark job** (commit tag `[bench]` or a manual run): a dedicated
+  server with Lithium, 1000 husks (a spread pen and a 200-mob pile), 60
+  villagers and a parked boat, measured with `/tick query` over
+  interleaved A/B arms, plus a JFR profile summarised per method
+  (`scripts/JfrHot.java`). It fails on any oracle mismatch.
+- **Inspect job** (commit tag `[inspect]`): prints `javap -c` of the
+  vanilla methods listed in `scripts/inspect-targets.txt`, so mixins can
+  be checked against this version's bytecode.
 
 ## [0.7.4-alpha] - 2026-09-07
 

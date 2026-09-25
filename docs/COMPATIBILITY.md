@@ -326,7 +326,15 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   rewrites also cut entity-query volume, so the entity index wins less
   there (JOURNEY, 2026-08-19). Lithium's `block.hopper` rewrite would
   bypass a hopper-extract consumer anyway; Ferrite's hopper layer is not
-  in the 26.x builds.
+  in the 26.x builds. Lithium 0.25 overwrites `BlockGetter.clip`
+  (`world.raycast`); Ferrite's line-of-sight air skip wraps the `clip`
+  call inside `LivingEntity.hasLineOfSight` instead, so mob sight rays
+  take Ferrite's path and every other ray keeps Lithium's. The oracle
+  compares sampled rays with Lithium's result. Lithium also gathers the
+  entity colliders for `Entity.move` itself
+  (`WorldHelper.getEntitiesForCollision`), and with it installed the CI
+  bench measured no difference between the per-section and level-wide
+  collider skip.
 - **ServerCore.** Its activation range skips `Entity.tick` for inactive
   entities, and dynamic simulation distance widens the band of loaded but
   frozen chunks. The cramming batch now takes as callers only mobs whose
