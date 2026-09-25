@@ -3,7 +3,7 @@
 
 Usage:
   worldgen-drive.py <port> <password> baseline <samples>
-  worldgen-drive.py <port> <password> explore <start-chunk-x> <width> <step-seconds> <duration-seconds>
+  worldgen-drive.py <port> <password> explore <start-chunk-x> <width> <step-seconds> <duration-seconds> [label]
 
 baseline: samples /tick query every 5 s and prints tick-time stats.
 
@@ -109,7 +109,8 @@ def status(r):
     return [int(g) for g in m.groups()]
 
 
-def explore(r, start, width, step, duration):
+def explore(r, start, width, step, duration, label=""):
+    tag = f"[{label}] " if label else ""
     samples = []
     backlogs = []
     head = start
@@ -143,18 +144,18 @@ def explore(r, start, width, step, duration):
     drain = time.monotonic() - explore_end
     requested, done, failed, median, p90, worst = status(r)
 
-    summarize("exploring", samples)
+    summarize(f"{tag}exploring", samples)
     total = time.monotonic() - t0
-    print(f"requested {requested} chunks ({head - start} columns x {width}) in {duration:.0f} s "
+    print(f"{tag}requested {requested} chunks ({head - start} columns x {width}) in {duration:.0f} s "
           f"({width / step:.1f} chunks/s asked)")
-    print(f"delivered {done_while_exploring} while exploring ({done_while_exploring / duration:.2f} chunks/s), "
+    print(f"{tag}delivered {done_while_exploring} while exploring ({done_while_exploring / duration:.2f} chunks/s), "
           f"{done} in {total:.0f} s with the drain ({drain:.0f} s): {done / total:.2f} chunks/s; {failed} failed")
-    print(f"chunk latency, request to loaded: median {median} ms  p90 {p90} ms  max {worst} ms")
+    print(f"{tag}chunk latency, request to loaded: median {median} ms  p90 {p90} ms  max {worst} ms")
     if backlogs:
-        print(f"backlog (requested, not yet loaded): mean {statistics.mean(backlogs):.0f} chunks, "
+        print(f"{tag}backlog (requested, not yet loaded): mean {statistics.mean(backlogs):.0f} chunks, "
               f"max {max(backlogs)} chunks ({max(backlogs) / width:.1f} columns behind the head)")
     for kind, t in sorted(r.times.items()):
-        print(f"rcon round trip '{kind}': n={len(t)} median {statistics.median(t) * 1000:.0f} ms "
+        print(f"{tag}rcon round trip '{kind}': n={len(t)} median {statistics.median(t) * 1000:.0f} ms "
               f"max {max(t) * 1000:.0f} ms")
     if done == 0:
         sys.exit("no chunk finished generating")
@@ -171,7 +172,8 @@ def main():
             samples.append(tick_query(r))
         summarize("baseline (no exploring)", samples)
     elif mode == "explore":
-        explore(r, int(sys.argv[4]), int(sys.argv[5]), float(sys.argv[6]), float(sys.argv[7]))
+        explore(r, int(sys.argv[4]), int(sys.argv[5]), float(sys.argv[6]), float(sys.argv[7]),
+                sys.argv[8] if len(sys.argv) > 8 else "")
     else:
         sys.exit(f"unknown mode {mode}")
 

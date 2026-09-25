@@ -69,7 +69,8 @@
 		"FerriteDispatcherProbeMixin",
 		"ChunkStageTimingMixin",
 		"AbstractConsecutiveExecutorDurationMixin",
-		"AquiferRouteMixin"
+		"AquiferRouteMixin",
+		"NoiseChunkWrapIndexMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

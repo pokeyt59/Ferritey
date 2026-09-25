@@ -3,10 +3,12 @@
 # run/mods (scripts/worldgen-mods.txt, fetched by the workflow).
 #
 # Stands in for players exploring fresh terrain on a small server: a
-# corridor of chunk tickets advances through ungenerated land
-# (scripts/worldgen-drive.py) while a mob pen keeps the server thread
-# busy. Reports tick time with and without exploring, chunks delivered
-# per second, how far generation falls behind, and, from a JFR recording
+# corridor of chunk tickets advances through ungenerated land, four times,
+# alternating default thread scheduling with the server thread on a core
+# of its own (scripts/worldgen-drive.py, scripts/pin-threads.py), while a
+# mob pen keeps the server thread busy. Reports tick time with and without exploring, chunks delivered
+# per second, how far generation falls behind, the cost of a height
+# query with and without DensityWrapIndex, and, from a JFR recording
 # of every thread, which worldgen stage the CPU went to
 # (scripts/JfrStages.java).
 #
@@ -23,7 +25,7 @@ CPUS=${WG_CPUS:-0-3}
 START_X=${WG_START_X:-2000}
 WIDTH=${WG_WIDTH:-9}
 STEP=${WG_STEP:-1}
-DURATION=${WG_DURATION:-120}
+DURATION=${WG_DURATION:-75}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
@@ -43,6 +45,7 @@ PROPS
 
 echo "=== cpu ==="
 lscpu | grep -E '^(Model name|CPU\(s\)|Thread\(s\) per core|Core\(s\) per socket|Socket\(s\))' || true
+grep . /sys/devices/system/cpu/cpu*/topology/thread_siblings_list || true
 echo "pinned to CPUs $CPUS"
 
 taskset -c "$CPUS" ./gradlew runServer -x buildRustLib -x copyRustDll "$@" < /dev/null > "$LOG" 2>&1 &
@@ -94,16 +97,40 @@ sleep 45
 
 python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee -a "$REPORT"
 
-# --- Exploring, recorded ----------------------------------------------------
+# Height queries (a whole NoiseChunk per column, made by structure
+# placement) with DensityWrapIndex on and off, on the server thread.
+echo "=== height queries ===" | tee -a "$REPORT"
+rcon "ferrite bench columns 200 6" | tee -a "$REPORT"
+
+# --- Exploring ----------------------------------------------------------------
+# Four phases over fresh terrain, alternating default scheduling with the
+# server thread on a physical core of its own (scripts/pin-threads.py).
+# The first phase is recorded with JFR.
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
 sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(period|throttle)"([^>]*)>[^<]*</setting>#<setting name="\1"\2>5 ms</setting>#' \
 	"$JAVA_HOME/lib/jfr/profile.jfc" > worldgen.jfc
-jcmd "$GAME_PID" JFR.start name=worldgen settings="$PWD/worldgen.jfc" filename="$PWD/worldgen.jfr" > /dev/null
-python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
-	"$START_X" "$WIDTH" "$STEP" "$DURATION" | tee -a "$REPORT" || explore_failed=1
-jcmd "$GAME_PID" JFR.stop name=worldgen > /dev/null || true
+x=$START_X
+recorded=
+for phase in default pinned default pinned; do
+	pinner=
+	if [ "$phase" = pinned ]; then
+		python3 scripts/pin-threads.py "$GAME_PID" split "$CPUS" verbose | tee -a "$REPORT"
+		( while sleep 2; do python3 scripts/pin-threads.py "$GAME_PID" split "$CPUS"; done ) &
+		pinner=$!
+	fi
+	[ -n "$recorded" ] || jcmd "$GAME_PID" JFR.start name=worldgen settings="$PWD/worldgen.jfc" filename="$PWD/worldgen.jfr" > /dev/null
+	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
+		"$x" "$WIDTH" "$STEP" "$DURATION" "$phase" | tee -a "$REPORT" || explore_failed=1
+	[ -n "$recorded" ] || { jcmd "$GAME_PID" JFR.stop name=worldgen > /dev/null || true; recorded=1; }
+	if [ -n "$pinner" ]; then
+		kill "$pinner"; wait "$pinner" 2>/dev/null || true
+		python3 scripts/pin-threads.py "$GAME_PID" reset "$CPUS"
+	fi
+	x=$((x + 200))
+done
+rcon "ferrite worldgen wrap-index status" | tee -a "$REPORT"
 
 rcon "stop" > /dev/null || true
 wait "$PID" || true
@@ -124,3 +151,5 @@ if [ -f worldgen.jfr ]; then
 	head -c 20000 worldgen-stages.txt | sed -n '1,16p' >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 fi
 [ -z "${explore_failed:-}" ] || { echo "::error::exploring failed"; exit 1; }
+grep -q 'heights differing 0;' "$REPORT" || { echo "::error::height queries differ with the wrap index"; exit 1; }
+grep -q 'oracleMismatches=0' "$REPORT" || { echo "::error::wrap index oracle mismatches"; exit 1; }

@@ -114,6 +114,10 @@ public final class FerriteCommand {
 						.then(Commands.literal("bench").executes(FerriteCommand::ffmBench)))
 				.then(Commands.literal("worldgen")
 						.then(Commands.literal("status").executes(FerriteCommand::worldgenStatus))
+						.then(Commands.literal("wrap-index")
+								.then(Commands.literal("on").executes(ctx -> setWrapIndex(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setWrapIndex(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setWrapIndex(ctx, null))))
 						.then(Commands.literal("sample")
 								.then(Commands.argument("name", StringArgumentType.greedyString())
 										.executes(FerriteCommand::worldgenSample)))
@@ -206,6 +210,16 @@ public final class FerriteCommand {
 												.then(Commands.argument("runsPerArm", IntegerArgumentType.integer(1, 10))
 														.executes(FerriteCommand::arrivalSuiteStart))))))
 				.then(Commands.literal("bench")
+						.then(Commands.literal("columns")
+								.then(Commands.argument("queries", IntegerArgumentType.integer(1, 100000))
+										.then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
+												.executes(ctx -> {
+													sendFeedback(ctx, me.apika.apikaprobe.worldgen.ColumnBench.run(
+															ctx.getSource().getLevel(),
+															IntegerArgumentType.getInteger(ctx, "queries"),
+															IntegerArgumentType.getInteger(ctx, "rounds")), false);
+													return Command.SINGLE_SUCCESS;
+												}))))
 						.then(Commands.literal("explore")
 								.then(Commands.literal("add")
 										.then(Commands.argument("x1", IntegerArgumentType.integer())
@@ -2019,6 +2033,22 @@ public final class FerriteCommand {
 	 * answer air blocks without the per-block shape clip.
 	 * Session only; -Dferrite.clip.airskip=false sets the boot default.
 	 */
+	/** /ferrite worldgen wrap-index on|off|status: DensityWrapIndex, for A/B. */
+	private static int setWrapIndex(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.worldgen.DensityWrapIndex.ENABLED = on;
+		}
+		String msg = String.format(
+				"[wrap-index] wrap-index=%s noiseChunks=%d oracleChecks=%d oracleMismatches=%d",
+				me.apika.apikaprobe.worldgen.DensityWrapIndex.ENABLED ? "on" : "off",
+				me.apika.apikaprobe.worldgen.DensityWrapIndex.created(),
+				me.apika.apikaprobe.worldgen.DensityWrapIndex.oracleChecks.sum(),
+				me.apika.apikaprobe.worldgen.DensityWrapIndex.oracleMismatches.sum());
+		sendFeedback(ctx, msg, on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
 	private static int setClipAirSkip(
 			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
 		if (on != null) {
