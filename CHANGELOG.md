@@ -71,7 +71,48 @@ marks pre-release research builds.
   One `NoiseChunk` in 64 maps every repeat anyway and checks that the
   same object comes back: 5,775,553 checks, no mismatch.
   `/ferrite worldgen map-memo on|off|status`,
-  `-Dferrite.worldgen.mapmemo=false`.
+  `-Dferrite.worldgen.mapmemo=false`. The whole-chunk noise bench
+  (below) measured it at 15.7% of the noise stage, with identical blocks.
+- **Noise sampling does the same arithmetic in fewer steps.** Noise
+  sampling (`PerlinNoise`, `ImprovedNoise`, `SimplexNoise.dot`) was about
+  18% of the worldgen workers' time. Two exact shortcuts:
+  - `PerlinNoise.wrap(d)` is `d - lfloor(d / 2^25 + 0.5) * 2^25`, run on
+    every coordinate of every octave (Perlin and blended noise). For
+    |d| < 2^23 the floor is 0 whatever the rounding, so the result is
+    `d - 0.0`, which is `d`, also for -0.0; those inputs now return `d`.
+  - `ImprovedNoise.sampleAndLerp` read its permutation as masked bytes
+    and each gradient as an `int[]` converted to double at every use. It
+    now reads an `int[]` permutation and one flat `double[]` of the same
+    gradients (taken from `SimplexNoise.GRADIENT`), with the same
+    operations in the same order and Mth's own smoothstep and lerp3.
+
+  Java floating point is strict, so the bits are the same. The first
+  200,000 samples after a start, and again after `verify`, are also
+  computed by the game's code and compared: no mismatch in any run.
+  The noise stage of whole chunks took 20.13 ms against 22.08 (8.8%
+  less, ahead in all six rounds, identical blocks); terrain height
+  queries 13.8-15.1% less over four runs. `/ferrite worldgen noise-math
+  on|off|verify|status`, `-Dferrite.worldgen.noisemath=false`.
+- **Interpolated noise values are worked out when read.** Inside a noise
+  cell, `NoiseChunk` stepped every interpolator (every `interpolated`
+  density function) at every block: `updateForZ` lerped each one's value
+  whether or not anything read it there, 6% of the worldgen workers'
+  time. Now the z step keeps its delta and skips that loop, and a read
+  of the value inside the loop (`NoiseInterpolator.compute`, its only
+  reader) returns `Mth.lerp(delta, valueZ0, valueZ1)`: the same lerp of
+  the same inputs. If x steps after the last z step, each interpolator's
+  z pair is saved first, so a read then still gets the value the last z
+  step would have left. Nothing is allocated per block (the loop's
+  iterator is swapped for an empty one). Chosen per `NoiseChunk`; one in
+  64 also runs the loop and compares every read bit for bit: 2,524,152
+  checks in one run, no mismatch. The noise stage of whole chunks took
+  19.99 ms against 20.78 (3.8% less, ahead in all six rounds, identical
+  blocks). `/ferrite worldgen lazy-interp on|off|status`,
+  `-Dferrite.worldgen.lazyinterp=false`.
+
+  Together with the noise sampling shortcuts, rotated explore phases
+  used 94 ms of worldgen CPU per chunk against 98 without either
+  (three pairs; phase-to-phase terrain varies by about 10%).
 - **Upgraded structure templates are kept between starts.** Mods ship
   structure templates saved by older game versions. The game upgrades
   each one through DataFixerUpper the first time it loads after every
@@ -193,6 +234,21 @@ marks pre-release research builds.
   deduplicated exactly as vanilla does (no oracle mismatch in 1,059,786
   checks, identical heights), but its reflective per-node cost made
   height queries 2.5 times slower (14.6 against 5.9 ms).
+- Tried and dropped: Biolith's biome search on flat arrays. Biolith
+  replaces the climate tree's search with one that also finds the
+  second-best biome, and with Terralith it was 11% of the worldgen
+  workers' time, about 19 us per lookup. A step-for-step copy over a
+  flattened tree (same visiting order, same strict comparisons, Biolith's
+  own warm start) was exact (193,457 oracle checks, identical biomes)
+  but whole-chunk biome lookups were only 2-5% faster over four runs:
+  the second-best bound keeps many nodes in play, and a traversal that
+  visits fewer would change which leaf wins a tie.
+- Tried and dropped: moving the chunks the server thread waits for to
+  the front of the chunk task queue. The same Roguelike Dungeons build
+  waited 12 times (mean 74 ms, 1.85 s of slow ticks) without it and 10
+  times (mean 72.5 ms, 1.60 s) with it on a runner of the same speed:
+  each wait is the generation of a chunk nobody had asked for yet, not
+  time in the queue.
 - With Lithium installed, turning the entity query index's queries off
   measured -0.1, +0.1 and +0.7 ms/tick over three runs, so it stays on
   with no consistent gain; the typed grid and the per-section collider
@@ -209,7 +265,9 @@ marks pre-release research builds.
   (`scripts/JfrHot.java`). It fails on any oracle mismatch.
 - **Inspect job** (commit tag `[inspect]`): prints `javap -c` of the
   vanilla methods listed in `scripts/inspect-targets.txt`, so mixins can
-  be checked against this version's bytecode.
+  be checked against this version's bytecode. It also fetches the
+  worldgen bench's mods, so their classes can be listed too (`@list`,
+  `@sig`); only the log's last 5,000 lines come back, so lists stay short.
 - **Worldgen bench** (commit tag `[worldgen-bench]` or a manual run with
   `worldgen`): live chunk generation on a list of worldgen mods pinned to
   known 26.2 versions (`scripts/worldgen-mods.txt`: Terralith, Biolith,
@@ -225,6 +283,14 @@ marks pre-release research builds.
   asynchronous loading tickets like a player's view. `/forceload`
   loads each chunk synchronously inside the command, and the first runs
   measured their own multi-second server stalls because of it.
+  Before exploring, it times single switches on work that repeats
+  exactly, in rotated rounds, and fails if the output differs:
+  `/ferrite bench columns <queries> <rounds> [map-memo|noise-math|lazy-interp]`
+  (terrain height queries) and `/ferrite bench noise <chunks> <rounds>
+  <switch>` (the noise stage of whole chunks through the generator's own
+  fill loop, every block state folded into a per-chunk checksum). The
+  explore phases vary by about 10% from terrain alone, too much to see a
+  few percent.
 
 ## [0.7.4-alpha] - 2026-09-07
 
