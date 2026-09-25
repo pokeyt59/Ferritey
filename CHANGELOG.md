@@ -34,9 +34,10 @@ marks pre-release research builds.
   computed as vanilla does. Only `LivingEntity.hasLineOfSight` takes this
   path; other rays keep vanilla's (or Lithium's) clip. CI bench (1000
   husks, 60 villagers behind glass, Lithium): 9.14 ms/tick with the skip,
-  10.21 ms without (a first version that reused vanilla's walk saved
-  0.5 ms); the oracle compared 124,592 rays with Lithium's clip and found
-  no difference. `/ferrite raycast air-skip on|off|status`,
+  10.21 ms without; in a four-round run 8.92 against 9.34, ahead in every
+  round (a first version that reused vanilla's walk saved 0.5 ms). The
+  oracle compared 180,797 rays with Lithium's clip and found no
+  difference. `/ferrite raycast air-skip on|off|status`,
   `-Dferrite.clip.airskip=false`.
 - **Brains walk their behavior table through a flat copy.** Every
   brain tick (villagers, piglins, axolotls, frogs, goats and other brain
@@ -114,8 +115,10 @@ marks pre-release research builds.
 
 ### Measured
 - On the CI bench, Ferrite's cramming batch against vanilla's
-  `pushEntities`: 9.14 ms/tick against 12.37 ms, and 7.94 against 10.09
-  on another runner (same runner per pair, interleaved arms). With
+  `pushEntities`: 8.92 ms/tick against 10.99 ms in a four-round run
+  (ahead in every round by 1.4 to 2.4 ms), and 9.14 against 12.37 and
+  7.94 against 10.09 on other runners (same runner per pair,
+  interleaved arms). With
   Lithium installed, turning the entity query index's queries off
   measured -0.1, +0.1 and +0.7 ms/tick over three runs, so it stays on
   with no consistent gain; the typed grid and the per-section collider
