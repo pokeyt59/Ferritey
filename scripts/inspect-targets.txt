@@ -1,8 +1,6 @@
 # One target per line: <fully.qualified.Class> <method-name-regex>
 # The CI inspect job prints javap -c -p for each matching method.
-net.minecraft.world.entity.ai.goal.GoalSelector tick|tickRunningGoals|goalContainsAnyFlags|goalCanBeReplacedForAllFlags|lambda.*
-net.minecraft.world.entity.ai.Brain startEachNonRunningBehavior|tickEachRunningBehavior|tickSensors|checkMemory|hasMemoryValue
-net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal findTarget|canUse|getTargetSearchArea
-net.minecraft.server.level.ServerEntityGetter getNearestEntity
-net.minecraft.world.entity.ai.targeting.TargetingConditions test
-net.minecraft.world.entity.ai.behavior.Behavior tryStart|hasRequiredMemories
+net.minecraft.world.entity.Entity checkInsideBlocks|lambda.checkInsideBlocks.[0-9]+|getOnPos|getBlockPosBelowThatAffectsMyMovement
+net.minecraft.world.level.BlockGetter forEachBlockIntersectedBetween|lambda.forEachBlockIntersectedBetween.*
+net.minecraft.world.entity.ai.Brain tick|setActiveActivity|setActiveActivityIfPossible|useDefaultActivity|updateActivityFromSchedule|addActivityAndRemoveMemoriesWhenStopped|addActivityWithConditions|getRunningBehaviors|isActive
+net.minecraft.world.entity.LivingEntity tickEffects
