@@ -279,6 +279,11 @@ public final class FerriteCommand {
 								.then(Commands.literal("on").executes(ctx -> setColliderSections(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setColliderSections(ctx, false)))
 								.then(Commands.literal("status").executes(ctx -> setColliderSections(ctx, null)))))
+				.then(Commands.literal("ai")
+						.then(Commands.literal("brain-cache")
+								.then(Commands.literal("on").executes(ctx -> setBrainCache(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setBrainCache(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setBrainCache(ctx, null)))))
 				.then(Commands.literal("raycast")
 						.then(Commands.literal("air-skip")
 								.then(Commands.literal("on").executes(ctx -> setClipAirSkip(ctx, true)))
@@ -1957,6 +1962,27 @@ public final class FerriteCommand {
 		String msg = String.format("[collider-skip] per-section=%s (skip %s)",
 				me.apika.apikaprobe.spatial.ColliderSkip.PER_SECTION ? "on" : "off",
 				me.apika.apikaprobe.spatial.ColliderSkip.ENABLED ? "on" : "off");
+		sendFeedback(ctx, msg, on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/**
+	 * /ferrite ai brain-cache on|off|status: whether brains walk their
+	 * behavior table through the flat copy. Session only;
+	 * -Dferrite.ai.braincache=false sets the boot default.
+	 */
+	private static int setBrainCache(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.ai.BrainBehaviorCache.ENABLED = on;
+		}
+		String msg = String.format(
+				"[brain-cache] brain-cache=%s uses=%d builds=%d oracleChecks=%d oracleMismatches=%d",
+				me.apika.apikaprobe.ai.BrainBehaviorCache.ENABLED ? "on" : "off",
+				me.apika.apikaprobe.ai.BrainBehaviorCache.uses,
+				me.apika.apikaprobe.ai.BrainBehaviorCache.builds,
+				me.apika.apikaprobe.ai.BrainBehaviorCache.oracleChecks,
+				me.apika.apikaprobe.ai.BrainBehaviorCache.oracleMismatches);
 		sendFeedback(ctx, msg, on != null);
 		return Command.SINGLE_SUCCESS;
 	}

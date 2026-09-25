@@ -17,8 +17,8 @@ REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
 SAMPLES=${BENCH_SAMPLES:-8}
-ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on"
-BENCH_ARMS=${BENCH_ARMS:-"all-on=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|index-off=$ON;ferrite entityquery index off"}
+ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on;ferrite ai brain-cache on"
+BENCH_ARMS=${BENCH_ARMS:-"all-on=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|index-off=$ON;ferrite entityquery index off|brain-vanilla=$ON;ferrite ai brain-cache off"}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
@@ -165,6 +165,8 @@ done
 rcon "execute if entity @e[type=minecraft:husk]" "execute if entity @e[type=minecraft:villager]"
 airskip=$(rcon "ferrite raycast air-skip status")
 echo "$airskip"
+braincache=$(rcon "ferrite ai brain-cache status")
+echo "$braincache"
 rcon "stop" > /dev/null || true
 wait "$PID" || true
 
@@ -172,7 +174,7 @@ if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Crit
 	fail "mixin errors in the server log"
 fi
 grep -v 'Rcon:' "$LOG" | grep '\[entity-query-cache\] scanned\|\[collider-skip\] eligible' | tail -8 || true
-if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH\|\[clip-airskip\] MISMATCH' "$LOG"; then
+if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH\|\[clip-airskip\] MISMATCH\|\[brain-cache\] MISMATCH' "$LOG"; then
 	grep 'MISMATCH' "$LOG" | head -5
 	fail "oracle mismatches"
 fi
@@ -193,3 +195,4 @@ fi
 # Last, so the numbers above always print: the air-skip mixin is
 # require = 0, so make sure it applied and ran.
 echo "$airskip" | grep -q 'rays=[1-9]' || { echo "::error::raycast air-skip never ran"; exit 1; }
+echo "$braincache" | grep -q 'uses=[1-9]' || { echo "::error::brain cache never ran"; exit 1; }

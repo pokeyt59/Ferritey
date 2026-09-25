@@ -35,6 +35,7 @@
 		"EntityCellMixin",
 		"EntityGetterMixin",
 		"LineOfSightClipMixin",
+		"BrainBehaviorCacheMixin",
 		"EntitySectionCallbackMixin",
 		"EntitySectionMixin",
 		"EntitySectionStorageMixin",
