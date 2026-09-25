@@ -38,6 +38,20 @@ marks pre-release research builds.
   0.5 ms); the oracle compared 124,592 rays with Lithium's clip and found
   no difference. `/ferrite raycast air-skip on|off|status`,
   `-Dferrite.clip.airskip=false`.
+- **Brains walk their behavior table through a flat copy.** Every
+  brain tick (villagers, piglins, axolotls, frogs, goats and other brain
+  mobs) walked a TreeMap of HashMaps of LinkedHashSets twice: once to try
+  each stopped behavior of an active activity, once to collect the
+  running ones. The table only changes in `Brain.addActivity` and
+  `removeAllBehaviors`, so both loops now walk an array copy in the same
+  order, rebuilt after either call; active activities and behavior
+  status are still read live. In the CI bench's profile the behavior
+  start loop took about a third fewer samples and villagers went from
+  about 13% to 11.6% of the server thread; with 60 villagers that is
+  below the MSPT noise (about 0.1 ms/tick), and it grows with villager
+  count. The oracle rebuilt and compared 1,207 copies without a
+  difference. `/ferrite ai brain-cache on|off|status`,
+  `-Dferrite.ai.braincache=false`.
 - **Lean mode with spark.** When spark is installed, about thirty
   timing-only mixins are left out at launch and monitor reports start
   off. `-Dferrite.diagnostics=true|false` or
