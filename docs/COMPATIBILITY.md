@@ -335,6 +335,13 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   (`WorldHelper.getEntitiesForCollision`), and with it installed the CI
   bench measured no difference between the per-section and level-wide
   collider skip.
+- **Fabric API (content registries).** Its `PathfindingContextMixin`
+  looks every pathfinding node's block up in `LandPathTypeRegistry`
+  before vanilla's path type cache. Ferrite answers from vanilla's body
+  ahead of it only while that registry is empty and no other mixin
+  targets `PathfindingContext`; a mod that registers a path type turns
+  the shortcut off on the next lookup (`/ferrite ai pathtype-bypass
+  status` says which).
 - **ServerCore.** Its activation range skips `Entity.tick` for inactive
   entities, and dynamic simulation distance widens the band of loaded but
   frozen chunks. The cramming batch now takes as callers only mobs whose

@@ -52,6 +52,17 @@ marks pre-release research builds.
   count. The oracle rebuilt and compared 1,207 copies without a
   difference. `/ferrite ai brain-cache on|off|status`,
   `-Dferrite.ai.braincache=false`.
+- **Path type lookups skip Fabric API's empty hook.** Fabric API's
+  content-registries hook sits in `PathfindingContext.getPathTypeFromState`,
+  the lookup behind every node a land pathfinder evaluates, ahead of
+  vanilla's path type cache: a block lookup and a registry lookup per
+  call, which only matter for blocks some mod registered. While nothing
+  is registered (checked on every call) and no other mod hooks that
+  method (checked once), Ferrite runs the method's vanilla body before
+  the hook. In the CI bench's profile, pathfinding fell from 5.6-5.8% of
+  the server thread to 3.3%. 85.9 million lookups took the shortcut in
+  one bench run. `/ferrite ai pathtype-bypass on|off|status`,
+  `-Dferrite.ai.pathtypebypass=false`.
 - **Lean mode with spark.** When spark is installed, about thirty
   timing-only mixins are left out at launch and monitor reports start
   off. `-Dferrite.diagnostics=true|false` or
