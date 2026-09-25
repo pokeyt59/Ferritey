@@ -27,13 +27,15 @@ public class JfrStages {
 	/** Stage name -> substrings of "Class.method" that mark it, most specific stages first. */
 	private static final Map<String, String[]> STAGES = new LinkedHashMap<>();
 	static {
-		STAGES.put("structure starts", new String[] {"ChunkGenerator.createStructures"});
-		STAGES.put("structure refs", new String[] {"ChunkGenerator.createReferences"});
-		STAGES.put("biomes", new String[] {".createBiomes", ".fillBiomesFromNoise"});
-		STAGES.put("noise", new String[] {"NoiseBasedChunkGenerator.fillFromNoise", "NoiseBasedChunkGenerator.doFill"});
-		STAGES.put("surface", new String[] {".buildSurface"});
-		STAGES.put("carvers", new String[] {".applyCarvers"});
-		STAGES.put("features", new String[] {".applyBiomeDecoration"});
+		// No leading dots: the work often runs in a lambda, whose frame is
+		// "Class.lambda$fillFromNoise$4" rather than "Class.fillFromNoise".
+		STAGES.put("structure starts", new String[] {"createStructures"});
+		STAGES.put("structure refs", new String[] {"createReferences"});
+		STAGES.put("biomes", new String[] {"createBiomes", "fillBiomesFromNoise"});
+		STAGES.put("noise", new String[] {"fillFromNoise", "NoiseBasedChunkGenerator.doFill"});
+		STAGES.put("surface", new String[] {"buildSurface"});
+		STAGES.put("carvers", new String[] {"applyCarvers"});
+		STAGES.put("features", new String[] {"applyBiomeDecoration"});
 		STAGES.put("light", new String[] {"LightEngine", "light.", "starlight", "scalablelux"});
 		STAGES.put("chunk io", new String[] {"RegionFile", "IOWorker", "SerializableChunkData", "ChunkSerializer", "NbtIo"});
 		STAGES.put("entity ticking", new String[] {"EntityTickList.forEach"});
@@ -44,10 +46,40 @@ public class JfrStages {
 		Map<String, Map<String, Integer>> table = new TreeMap<>();
 		Map<String, Integer> groupTotals = new TreeMap<>();
 		Map<String, Map<String, Integer>> selfByGroup = new TreeMap<>();
+		Map<String, Integer> otherEntries = new TreeMap<>();
+		List<String> gcPauses = new ArrayList<>();
+		List<long[]> gcNanos = new ArrayList<>();
+		List<String> stalls = new ArrayList<>();
+		List<long[]> serverTimes = new ArrayList<>();   // {nanos, index into serverWhat}
+		List<String> serverWhat = new ArrayList<>();
 		try (RecordingFile file = new RecordingFile(Path.of(args[0]))) {
 			while (file.hasMoreEvents()) {
 				RecordedEvent event = file.readEvent();
-				if (!"jdk.ExecutionSample".equals(event.getEventType().getName())) continue;
+				String type = event.getEventType().getName();
+				if (type.equals("jdk.GarbageCollection")) {
+					long ns = event.getDuration().toNanos();
+					gcNanos.add(new long[] {ns, gcPauses.size()});
+					gcPauses.add(String.format("%8.1f ms  %s (%s), longest pause %.1f ms",
+							ns / 1e6, event.getString("name"), event.getString("cause"),
+							event.getDuration("longestPause").toNanos() / 1e6));
+					continue;
+				}
+				if (type.equals("jdk.ThreadPark") || type.equals("jdk.JavaMonitorEnter")
+						|| type.equals("jdk.JavaMonitorWait") || type.equals("jdk.ThreadSleep")) {
+					RecordedThread t = event.getThread();
+					long ms = event.getDuration().toMillis();
+					if (t != null && "Server thread".equals(t.getJavaName()) && ms >= 50) {
+						StringBuilder sb = new StringBuilder(String.format("%6d ms  %s", ms, type));
+						RecordedStackTrace st = event.getStackTrace();
+						if (st != null) {
+							List<RecordedFrame> fr = st.getFrames();
+							for (int i = 0; i < Math.min(14, fr.size()); i++) sb.append("\n            at ").append(name(fr.get(i)));
+						}
+						stalls.add(sb.toString());
+					}
+					continue;
+				}
+				if (!"jdk.ExecutionSample".equals(type)) continue;
 				RecordedStackTrace stack = event.getStackTrace();
 				if (stack == null || stack.getFrames().isEmpty()) continue;
 				RecordedThread thread = event.getThread("sampledThread");
@@ -55,6 +87,12 @@ public class JfrStages {
 				List<RecordedFrame> frames = stack.getFrames();
 				String stage = stage(frames);
 				table.computeIfAbsent(stage, k -> new TreeMap<>()).merge(group, 1, Integer::sum);
+				if (stage.equals("other")) otherEntries.merge(group + "  " + entry(frames), 1, Integer::sum);
+				if (group.equals("server thread")) {
+					long t = event.getStartTime().getEpochSecond() * 1_000_000_000L + event.getStartTime().getNano();
+					serverTimes.add(new long[] {t, serverWhat.size()});
+					serverWhat.add(stage + "  " + inner(frames));
+				}
 				groupTotals.merge(group, 1, Integer::sum);
 				selfByGroup.computeIfAbsent(group, k -> new TreeMap<>()).merge(name(frames.get(0)), 1, Integer::sum);
 			}
@@ -79,6 +117,41 @@ public class JfrStages {
 		System.out.printf("%-18s", "total samples");
 		for (String g : groups) System.out.printf(" %20d", groupTotals.get(g));
 		System.out.println();
+
+		System.out.println("\n=== \"other\": where those samples enter Minecraft (outermost game frame) ===");
+		List<Map.Entry<String, Integer>> oe = new ArrayList<>(otherEntries.entrySet());
+		oe.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+		for (Map.Entry<String, Integer> e : oe.subList(0, Math.min(15, oe.size()))) {
+			System.out.printf("%8d  %s%n", e.getValue(), e.getKey());
+		}
+
+		// The busiest second of the server thread: a long tick shows as a
+		// dense run of samples; what ran in it is the likely cause.
+		serverTimes.sort((a, b) -> Long.compare(a[0], b[0]));
+		int best = 0, bestStart = 0;
+		for (int i = 0, j = 0; i < serverTimes.size(); i++) {
+			while (serverTimes.get(i)[0] - serverTimes.get(j)[0] > 1_000_000_000L) j++;
+			if (i - j + 1 > best) { best = i - j + 1; bestStart = j; }
+		}
+		System.out.printf("%n=== server thread's busiest 1 s window: %d samples ===%n", best);
+		Map<String, Integer> inWindow = new TreeMap<>();
+		for (int k = bestStart; k < bestStart + best; k++) {
+			inWindow.merge(serverWhat.get((int) serverTimes.get(k)[1]), 1, Integer::sum);
+		}
+		List<Map.Entry<String, Integer>> iw = new ArrayList<>(inWindow.entrySet());
+		iw.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+		for (Map.Entry<String, Integer> e : iw.subList(0, Math.min(12, iw.size()))) {
+			System.out.printf("%6d  %s%n", e.getValue(), e.getKey());
+		}
+
+		System.out.println("\n=== server thread blocked >= 50 ms (park, monitor, sleep) ===");
+		for (String st : stalls.subList(0, Math.min(12, stalls.size()))) System.out.println(st);
+		System.out.println(stalls.size() + " such events");
+
+		System.out.println("\n=== longest garbage collections ===");
+		gcNanos.sort((a, b) -> Long.compare(b[0], a[0]));
+		for (long[] g : gcNanos.subList(0, Math.min(6, gcNanos.size()))) System.out.println(gcPauses.get((int) g[1]));
+		System.out.println(gcNanos.size() + " collections");
 
 		for (String g : groups) {
 			if (g.equals("other threads")) continue;
@@ -115,6 +188,35 @@ public class JfrStages {
 			}
 		}
 		return "other";
+	}
+
+	/** The two innermost game or mod frames, for "what was it doing". */
+	private static String inner(List<RecordedFrame> frames) {
+		StringBuilder sb = new StringBuilder();
+		int found = 0;
+		for (RecordedFrame f : frames) {
+			String n = name(f);
+			if (n.startsWith("java.") || n.startsWith("jdk.") || n.startsWith("it.unimi.")) continue;
+			if (found > 0) sb.append(" <- ");
+			sb.append(n);
+			if (++found == 3) break;
+		}
+		return sb.toString();
+	}
+
+	/** Outermost frame from the game or a mod, skipping JDK and library frames. */
+	private static String entry(List<RecordedFrame> frames) {
+		for (int i = frames.size() - 1; i >= 0; i--) {
+			String n = name(frames.get(i));
+			if (n.startsWith("java.") || n.startsWith("jdk.") || n.startsWith("sun.")
+					|| n.startsWith("com.google.") || n.startsWith("it.unimi.")
+					|| n.startsWith("com.mojang.datafixers.")) continue;
+			// Skip generic executor plumbing to reach the task itself.
+			if (n.contains("Executor") || n.contains("TaskScheduler") || n.contains("ProcessorMailbox")
+					|| n.contains("Util.") || n.contains("CompletableFuture")) continue;
+			return n;
+		}
+		return "?";
 	}
 
 	private static String name(RecordedFrame frame) {

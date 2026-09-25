@@ -112,6 +112,9 @@ if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Crit
 	fail "mixin errors in the server log"
 fi
 
+echo "=== server log: ticks running behind ==="
+grep -E "Can't keep up|ticks behind" "$LOG" | tail -20 | tee -a "$REPORT" || true
+
 echo "=== worldgen report ==="
 cat "$REPORT" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 if [ -f worldgen.jfr ]; then

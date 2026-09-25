@@ -32,6 +32,7 @@ class Rcon:
     def __init__(self, port, password):
         self.sock = socket.create_connection(("127.0.0.1", port), timeout=120)
         self.next_id = 1
+        self.times = {}
         self._send(LOGIN, password)
         if self._recv()[0] == -1:
             sys.exit("rcon login refused")
@@ -57,8 +58,14 @@ class Rcon:
         return req_id, data[8:-2].decode("utf-8", "replace")
 
     def cmd(self, text):
+        start = time.monotonic()
         self._send(COMMAND, text)
-        return self._recv()[1]
+        out = self._recv()[1]
+        # Commands run on the server thread between ticks, so a slow
+        # round trip is a slow tick (or a slow command) seen from outside.
+        kind = text.split(" ")[0]
+        self.times.setdefault(kind, []).append(time.monotonic() - start)
+        return out
 
 
 def tick_query(r):
@@ -162,6 +169,9 @@ def explore(r, start, width, step, duration):
     if lags:
         print(f"generation lag behind the head: mean {statistics.mean(lags):.1f} columns, "
               f"max {max(lags)} columns ({max(lags) * 16} blocks)")
+    for kind, t in sorted(r.times.items()):
+        print(f"rcon round trip '{kind}': n={len(t)} median {statistics.median(t) * 1000:.0f} ms "
+              f"max {max(t) * 1000:.0f} ms")
     if finished == 0:
         sys.exit("no column finished generating")
 
