@@ -51,6 +51,8 @@ public class JfrStages {
 		"BiomeManager.getBiome", "SurfaceSystem.buildSurface", "Beardifier.compute", "Aquifer",
 		"JigsawPlacement", "JigsawStructure", "StructureTemplate", "PlacedFeature.place",
 	};
+	/** Frames whose samples are broken down by self frame. */
+	private static final String[] INSIDE = {"NoiseChunk.<init>", "Climate$RTree", "JigsawStructure", "SurfaceSystem.buildSurface"};
 	private static final String[] CHUNK_SYSTEM = {"ChunkMap.", "ChunkHolder.", "ChunkStep", "ServerChunkCache.", "ChunkTaskDispatcher", "ChunkResult"};
 
 	public static void main(String[] args) throws Exception {
@@ -61,6 +63,8 @@ public class JfrStages {
 		// callers of generic frames such as Objects.hashCode.
 		Map<String, Map<String, Integer>> workerCallers = new TreeMap<>();
 		Map<String, Integer> workerInclusive = new LinkedHashMap<>();
+		Map<String, Map<String, Integer>> insideSelf = new LinkedHashMap<>();
+		for (String marker : INSIDE) insideSelf.put(marker, new TreeMap<>());
 		for (String marker : INCLUSIVE) workerInclusive.put(marker, 0);
 		Map<String, Integer> otherEntries = new TreeMap<>();
 		List<String> gcPauses = new ArrayList<>();
@@ -114,6 +118,14 @@ public class JfrStages {
 				if (group.equals("worldgen workers")) {
 					workerCallers.computeIfAbsent(name(frames.get(0)), k -> new TreeMap<>())
 							.merge(callers(frames), 1, Integer::sum);
+					for (String marker : INSIDE) {
+						for (RecordedFrame f : frames) {
+							if (name(f).contains(marker)) {
+								insideSelf.get(marker).merge(name(frames.get(0)), 1, Integer::sum);
+								break;
+							}
+						}
+					}
 					for (String marker : INCLUSIVE) {
 						for (RecordedFrame f : frames) {
 							if (name(f).contains(marker)) {
@@ -196,6 +208,18 @@ public class JfrStages {
 			System.out.println("\n=== worldgen workers: samples with the frame on the stack ===");
 			for (Map.Entry<String, Integer> e : workerInclusive.entrySet()) {
 				System.out.printf("%6.2f%%  %6d  %s%n", 100.0 * e.getValue() / workerTotal, e.getValue(), e.getKey());
+			}
+		}
+
+		for (Map.Entry<String, Map<String, Integer>> in : insideSelf.entrySet()) {
+			int total = 0;
+			for (int n : in.getValue().values()) total += n;
+			if (total == 0) continue;
+			System.out.printf("%n=== worldgen workers under %s (%d samples): top self frames ===%n", in.getKey(), total);
+			List<Map.Entry<String, Integer>> list = new ArrayList<>(in.getValue().entrySet());
+			list.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+			for (Map.Entry<String, Integer> e : list.subList(0, Math.min(10, list.size()))) {
+				System.out.printf("%6.2f%%  %6d  %s%n", 100.0 * e.getValue() / total, e.getValue(), e.getKey());
 			}
 		}
 

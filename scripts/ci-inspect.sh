@@ -29,6 +29,18 @@ grep '^@list ' scripts/inspect-targets.txt | while read -r _ jre ere; do
 	done
 done
 
+# "@sig <jar-name-regex> <entry-regex> <member-regex>" prints, for every
+# matching class, only the member signatures (javap -p) matching the regex.
+grep '^@sig ' scripts/inspect-targets.txt | while read -r _ jre ere mre; do
+	for j in "${jars[@]}"; do
+		[[ "$(basename "$j")" =~ $jre ]] || continue
+		unzip -Z1 "$j" | grep -E "$ere" | while read -r entry; do
+			hits=$(javap -p -classpath "$j" "${entry%.class}" 2>/dev/null | grep -E "$mre" || true)
+			[ -n "$hits" ] && printf '#sig %s\n%s\n' "${entry%.class}" "$hits"
+		done
+	done
+done
+
 grep -v '^#\|^@' scripts/inspect-targets.txt | while read -r cls methods; do
 	[ -n "$cls" ] || continue
 	entry="${cls//.//}.class"

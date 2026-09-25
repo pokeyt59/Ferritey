@@ -1,6 +1,6 @@
 package me.apika.apikaprobe.worldgen;
 
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.IntSupplier;
 
@@ -27,7 +27,8 @@ import net.minecraft.world.level.levelgen.RandomState;
  * direct-mapped and fixed-size; a colliding query replaces the entry.
  * Entries are immutable, so threads share the table without locks.
  *
- * Oracle: one hit in ORACLE_EVERY is computed anyway and compared.
+ * Oracle: every ORACLE_EVERY-th hit, the first included, is computed
+ * anyway and compared.
  * Off: -Dferrite.worldgen.heightcache=false or /ferrite worldgen height-cache off.
  */
 public final class BaseHeightCache {
@@ -40,7 +41,7 @@ public final class BaseHeightCache {
 	private static final Entry[] TABLE = new Entry[SIZE];
 
 	public static final LongAdder queries = new LongAdder();
-	public static final LongAdder hits = new LongAdder();
+	public static final AtomicLong hits = new AtomicLong();
 	public static final LongAdder oracleChecks = new LongAdder();
 	public static final LongAdder oracleMismatches = new LongAdder();
 
@@ -59,8 +60,7 @@ public final class BaseHeightCache {
 		Entry e = TABLE[slot];
 		if (e != null && e.generator == generator && e.random == random && e.minY == minY
 				&& e.height == height && e.x == x && e.z == z && e.type == t) {
-			hits.increment();
-			if (ThreadLocalRandom.current().nextInt(ORACLE_EVERY) != 0) return e.value;
+			if (hits.getAndIncrement() % ORACLE_EVERY != 0) return e.value;
 			int actual = compute.getAsInt();
 			oracleChecks.increment();
 			if (actual != e.value) {
@@ -85,7 +85,7 @@ public final class BaseHeightCache {
 
 	public static String status() {
 		long q = queries.sum();
-		long h = hits.sum();
+		long h = hits.get();
 		return String.format("[height-cache] height-cache=%s queries=%d hits=%d (%.1f%%) oracleChecks=%d oracleMismatches=%d",
 				ENABLED ? "on" : "off", q, h, q == 0 ? 0.0 : 100.0 * h / q,
 				oracleChecks.sum(), oracleMismatches.sum());

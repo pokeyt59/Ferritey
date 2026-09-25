@@ -10,3 +10,4 @@ net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator iterateNoiseColumn|g
 net.minecraft.world.level.levelgen.DensityFunctions$HolderHolder mapAll|hashCode|equals
 net.minecraft.world.level.levelgen.DensityFunctions$Ap2 mapAll|hashCode|create
 net.minecraft.core.Holder$Direct hashCode|equals
+@sig minecraft-extracted_server net/minecraft/world/level/levelgen/(DensityFunctions|DensityFunction|NoiseChunk|synth/BlendedNoise|NoiseRouter).*\.class mapAll|implements|class|interface|record

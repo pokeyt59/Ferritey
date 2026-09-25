@@ -94,6 +94,9 @@ rcon "${pen[@]}" | sort | uniq -c
 echo "warming up"
 sleep 45
 
+# Setup (the pen's forceload) stalls the server by design; only later
+# "Can't keep up" warnings are reported.
+measured_from=$(wc -l < "$LOG")
 python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee -a "$REPORT"
 
 
@@ -102,7 +105,8 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 # "pin" puts the server thread on a physical core of its own and the
 # worldgen workers on the others (scripts/pin-threads.py); anything else
 # is a server command. The first phase is recorded with JFR.
-PHASES=${WG_PHASES:-"cache-on=ferrite worldgen height-cache on|cache-off=ferrite worldgen height-cache off|cache-on=ferrite worldgen height-cache on|cache-off=ferrite worldgen height-cache off"}
+ISO="ferrite worldgen isolate-server-core"
+PHASES=${WG_PHASES:-"isolated=$ISO on|default=$ISO off|isolated=$ISO on|default=$ISO off"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -130,7 +134,7 @@ for spec in "${phase_list[@]}"; do
 		kill "$pinner"; wait "$pinner" 2>/dev/null || true
 		python3 scripts/pin-threads.py "$GAME_PID" reset "$CPUS"
 	fi
-	rcon "ferrite worldgen height-cache status" | sed "s/^/[$label] /" | tee -a "$REPORT"
+	rcon "ferrite worldgen height-cache status" "$ISO status" | sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
 
@@ -142,7 +146,7 @@ if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Crit
 fi
 
 echo "=== server log: ticks running behind ==="
-grep -E "Can't keep up|ticks behind" "$LOG" | tail -20 | tee -a "$REPORT" || true
+tail -n +"$((measured_from + 1))" "$LOG" | grep -E "Can't keep up|ticks behind" | tail -20 | tee -a "$REPORT" || true
 
 echo "=== worldgen report ==="
 cat "$REPORT" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
