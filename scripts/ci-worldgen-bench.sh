@@ -157,6 +157,30 @@ jcmd "$GAME_PID" JFR.stop name=whole > /dev/null || true
 
 rcon "stop" > /dev/null || true
 wait "$PID" || true
+FIRST_LOG=$LOG
+
+# --- Second start ---------------------------------------------------------------
+# Structure templates were upgraded (DataFixerUpper) and cached during the
+# first start; this start explores fresh terrain once more and reports how
+# many upgrades came from the cache.
+if [ "${WG_RESTART:-1}" = 1 ]; then
+	LOG=worldgen-server-2.log
+	taskset -c "$CPUS" ./gradlew runServer -x buildRustLib -x copyRustDll "$@" < /dev/null > "$LOG" 2>&1 &
+	PID=$!
+	wait_for 'Done (' 1800
+	wait_for 'RCON running' 60
+	rcon "ferrite worldgen structure-dfu status" | sed 's/^/[second start, after startup] /' | tee -a "$REPORT"
+	sleep 20
+	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
+		"$x" "$WIDTH" "$STEP" "$DURATION" "after-restart" | tee -a "$REPORT" || explore_failed=1
+	rcon "ferrite worldgen structure-dfu status" | sed 's/^/[after-restart] /' | tee -a "$REPORT"
+	rcon "stop" > /dev/null || true
+	wait "$PID" || true
+	if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Critical injection failure|MixinApplyError' "$LOG"; then
+		fail "mixin errors in the second start's log"
+	fi
+	LOG=$FIRST_LOG
+fi
 
 if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Critical injection failure|MixinApplyError' "$LOG"; then
 	fail "mixin errors in the server log"

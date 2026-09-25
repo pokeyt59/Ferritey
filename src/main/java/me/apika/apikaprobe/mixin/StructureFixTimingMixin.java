@@ -6,12 +6,16 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.datafixers.DataFixer;
 
+import me.apika.apikaprobe.worldgen.StructureFixCache;
 import me.apika.apikaprobe.worldgen.StructureFixTiming;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.datafix.DataFixTypes;
 
-/** Times structure template upgrades; every other data type passes straight through. */
+/**
+ * Structure template upgrades go through StructureFixCache and are timed;
+ * every other data type passes straight through.
+ */
 @Mixin(DataFixTypes.class)
 public abstract class StructureFixTimingMixin {
 
@@ -24,7 +28,7 @@ public abstract class StructureFixTimingMixin {
 		if ((Object) this != DataFixTypes.STRUCTURE) return original.call(fixer, tag, from, to);
 		long start = System.nanoTime();
 		try {
-			return original.call(fixer, tag, from, to);
+			return StructureFixCache.upgrade(tag, from, to, () -> original.call(fixer, tag, from, to));
 		} finally {
 			StructureFixTiming.record(System.nanoTime() - start);
 		}

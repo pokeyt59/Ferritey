@@ -320,6 +320,7 @@ jobs:
             worldgen-hot.txt
             worldgen-mods-fetched.txt
             worldgen-server.log
+            worldgen-server-2.log
             run/logs/latest.log
             worldgen.jfr
           if-no-files-found: ignore

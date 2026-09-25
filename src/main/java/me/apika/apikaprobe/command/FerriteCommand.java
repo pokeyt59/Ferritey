@@ -119,10 +119,10 @@ public final class FerriteCommand {
 								.then(Commands.literal("off").executes(ctx -> setServerCore(ctx, false)))
 								.then(Commands.literal("status").executes(ctx -> setServerCore(ctx, null))))
 						.then(Commands.literal("structure-dfu")
-								.then(Commands.literal("status").executes(ctx -> {
-									sendFeedback(ctx, me.apika.apikaprobe.worldgen.StructureFixTiming.status(), false);
-									return Command.SINGLE_SUCCESS;
-								})))
+								.then(Commands.literal("status").executes(ctx -> structureDfu(ctx, null)))
+								.then(Commands.literal("cache")
+										.then(Commands.literal("on").executes(ctx -> structureDfu(ctx, true)))
+										.then(Commands.literal("off").executes(ctx -> structureDfu(ctx, false)))))
 						.then(Commands.literal("map-memo")
 								.then(Commands.literal("on").executes(ctx -> setMapMemo(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setMapMemo(ctx, false)))
@@ -2074,6 +2074,15 @@ public final class FerriteCommand {
 			}
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.ServerCoreAffinity.status(), on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/** /ferrite worldgen structure-dfu status|cache on|off: template upgrade timing and cache. */
+	private static int structureDfu(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean cache) {
+		if (cache != null) me.apika.apikaprobe.worldgen.StructureFixCache.ENABLED = cache;
+		sendFeedback(ctx, me.apika.apikaprobe.worldgen.StructureFixTiming.status() + "\n"
+				+ me.apika.apikaprobe.worldgen.StructureFixCache.status(), cache != null);
 		return Command.SINGLE_SUCCESS;
 	}
 
