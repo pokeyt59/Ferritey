@@ -1,7 +1,6 @@
 package me.apika.apikaprobe.spatial;
 
 import java.util.Objects;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import me.apika.apikaprobe.bridge.ExampleMod;
@@ -10,9 +9,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -33,18 +34,22 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * {@code ClipContext.Fluid} mode can pick it. Lithium's clip caches the chunk
  * but still builds and clips the shapes of every air block.
  *
- * {@link #clip} runs vanilla's own walk ({@code BlockGetter.traverseBlocks})
- * with a per-block function that reads the block from the chunk section it
- * last used and returns "no hit" for air. Any other block runs a copy of
- * 26.2's per-block function from {@code BlockGetter.clip}; a chunk that is
- * not loaded, or a call off the server thread, also goes that way. The miss
- * result is a copy of clip's miss function. Results equal vanilla's.
+ * {@link #clip} walks the ray with a copy of 26.2's
+ * {@code BlockGetter.traverseBlocks} (same arithmetic, same order), reading
+ * each block from the chunk section it last used: air returns "no hit" at
+ * once; any other block runs a copy of 26.2's per-block function from
+ * {@code BlockGetter.clip} on that state. A chunk that is not loaded, or a
+ * call off the server thread, reads the block through the level as vanilla
+ * does. The miss result is a copy of clip's miss function. Results equal
+ * vanilla's. Walking here rather than through traverseBlocks keeps the
+ * per-block step a direct call: traverseBlocks' own call site is shared
+ * with Lithium's and vanilla's clip, so the JIT cannot inline through it.
  *
  * The oracle runs the original clip (vanilla's, or Lithium's) on 1 in N
  * calls and logs any difference. Kill switch -Dferrite.clip.airskip=false;
  * /ferrite raycast air-skip on|off|status toggles it for A/B.
  */
-public final class ClipAirSkip implements BiFunction<ClipContext, BlockPos, BlockHitResult> {
+public final class ClipAirSkip {
 
 	public static volatile boolean ENABLED = !"false".equals(System.getProperty("ferrite.clip.airskip"));
 
@@ -72,6 +77,8 @@ public final class ClipAirSkip implements BiFunction<ClipContext, BlockPos, Bloc
 	private int chunkX = Integer.MAX_VALUE;
 	private int chunkZ = Integer.MAX_VALUE;
 	private LevelChunkSection[] sections;
+	private long skippedHere;
+	private long passedHere;
 
 	private ClipAirSkip(ServerLevel level) {
 		this.level = level;
@@ -83,8 +90,11 @@ public final class ClipAirSkip implements BiFunction<ClipContext, BlockPos, Bloc
 		// The debug world computes its states instead of storing them.
 		if (!ENABLED || !(level instanceof ServerLevel server) || server.isDebug()) return null;
 		rays++;
-		return BlockGetter.traverseBlocks(context.getFrom(), context.getTo(), context,
-				new ClipAirSkip(server), MISS);
+		ClipAirSkip walker = new ClipAirSkip(server);
+		BlockHitResult result = walker.walk(context);
+		skipped += walker.skippedHere;
+		passed += walker.passedHere;
+		return result;
 	}
 
 	/** True for the rays the oracle should compare with the original clip. */
@@ -109,20 +119,76 @@ public final class ClipAirSkip implements BiFunction<ClipContext, BlockPos, Bloc
 				original.getType(), original.getLocation(), original.getDirection(), original.getBlockPos());
 	}
 
-	@Override
-	public BlockHitResult apply(ClipContext context, BlockPos pos) {
-		if (isAir(pos)) {
-			skipped++;
-			return null;
+	/** BlockGetter.traverseBlocks (26.2) with clip's per-block and miss functions. */
+	private BlockHitResult walk(ClipContext context) {
+		Vec3 from = context.getFrom();
+		Vec3 to = context.getTo();
+		if (from.equals(to)) return MISS.apply(context);
+		double toX = Mth.lerp(-1.0E-7, to.x, from.x);
+		double toY = Mth.lerp(-1.0E-7, to.y, from.y);
+		double toZ = Mth.lerp(-1.0E-7, to.z, from.z);
+		double fromX = Mth.lerp(-1.0E-7, from.x, to.x);
+		double fromY = Mth.lerp(-1.0E-7, from.y, to.y);
+		double fromZ = Mth.lerp(-1.0E-7, from.z, to.z);
+		int x = Mth.floor(fromX);
+		int y = Mth.floor(fromY);
+		int z = Mth.floor(fromZ);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, y, z);
+		BlockHitResult hit = visit(context, pos);
+		if (hit != null) return hit;
+		double dx = toX - fromX;
+		double dy = toY - fromY;
+		double dz = toZ - fromZ;
+		int signX = Mth.sign(dx);
+		int signY = Mth.sign(dy);
+		int signZ = Mth.sign(dz);
+		double stepX = signX == 0 ? Double.MAX_VALUE : (double) signX / dx;
+		double stepY = signY == 0 ? Double.MAX_VALUE : (double) signY / dy;
+		double stepZ = signZ == 0 ? Double.MAX_VALUE : (double) signZ / dz;
+		double tX = stepX * (signX > 0 ? 1.0 - Mth.frac(fromX) : Mth.frac(fromX));
+		double tY = stepY * (signY > 0 ? 1.0 - Mth.frac(fromY) : Mth.frac(fromY));
+		double tZ = stepZ * (signZ > 0 ? 1.0 - Mth.frac(fromZ) : Mth.frac(fromZ));
+		while (tX <= 1.0 || tY <= 1.0 || tZ <= 1.0) {
+			if (tX < tY) {
+				if (tX < tZ) {
+					x += signX;
+					tX += stepX;
+				} else {
+					z += signZ;
+					tZ += stepZ;
+				}
+			} else if (tY < tZ) {
+				y += signY;
+				tY += stepY;
+			} else {
+				z += signZ;
+				tZ += stepZ;
+			}
+			hit = visit(context, pos.set(x, y, z));
+			if (hit != null) return hit;
 		}
-		passed++;
-		return block(level, context, pos);
+		return MISS.apply(context);
 	}
 
-	/** BlockGetter.clip's per-block function (lambda$clip$0 in 26.2). */
-	private static BlockHitResult block(BlockGetter getter, ClipContext context, BlockPos pos) {
-		BlockState blockState = getter.getBlockState(pos);
-		FluidState fluidState = getter.getFluidState(pos);
+	/** clip's per-block step: air answers "no hit" without the shape clip. */
+	private BlockHitResult visit(ClipContext context, BlockPos pos) {
+		BlockState state = stateIfLoaded(pos);
+		if (state == null) {
+			passedHere++;
+			return block(level, context, pos, level.getBlockState(pos), level.getFluidState(pos));
+		}
+		if (state.isAir()) {
+			skippedHere++;
+			return null;
+		}
+		passedHere++;
+		// LevelChunkSection.getFluidState is states.get(...).getFluidState().
+		return block(level, context, pos, state, state.getFluidState());
+	}
+
+	/** BlockGetter.clip's per-block function (lambda$clip$0 in 26.2) on a known state. */
+	private static BlockHitResult block(BlockGetter getter, ClipContext context, BlockPos pos,
+			BlockState blockState, FluidState fluidState) {
 		Vec3 from = context.getFrom();
 		Vec3 to = context.getTo();
 		VoxelShape blockShape = context.getBlockShape(blockState, getter, pos);
@@ -137,32 +203,33 @@ public final class ClipAirSkip implements BiFunction<ClipContext, BlockPos, Bloc
 	}
 
 	/**
-	 * Same answer as vanilla's Level.getBlockState(pos).isAir(), but only
-	 * claims air when it can read the block without loading anything:
-	 * outside the build height (vanilla returns VOID_AIR there), or in a
-	 * loaded chunk. Anything else answers false and takes the full path.
+	 * Level.getBlockState(pos) when it can be read without loading anything:
+	 * outside the build height (VOID_AIR, as vanilla), or from a loaded
+	 * chunk's section (AIR for a section with only air, as
+	 * LevelChunk.getBlockState). Null otherwise: the caller then asks the
+	 * level, which loads or waits as vanilla does.
 	 */
-	private boolean isAir(BlockPos pos) {
+	private BlockState stateIfLoaded(BlockPos pos) {
 		int y = pos.getY();
-		if (level.isOutsideBuildHeight(y)) return true;
+		if (level.isOutsideBuildHeight(y)) return Blocks.VOID_AIR.defaultBlockState();
 		int x = pos.getX();
 		int z = pos.getZ();
 		int cx = x >> 4;
 		int cz = z >> 4;
 		if (cx != chunkX || cz != chunkZ) {
 			// getChunkNow is null off the server thread and for chunks that
-			// are not loaded to FULL; vanilla then loads or waits as usual.
+			// are not loaded to FULL.
 			LevelChunk chunk = chunks.getChunkNow(cx, cz);
 			sections = chunk == null ? null : chunk.getSections();
 			chunkX = cx;
 			chunkZ = cz;
 		}
 		LevelChunkSection[] s = sections;
-		if (s == null) return false;
+		if (s == null) return null;
 		int index = level.getSectionIndex(y);
-		if (index < 0 || index >= s.length) return false;
+		if (index < 0 || index >= s.length) return null;
 		LevelChunkSection section = s[index];
-		// LevelChunk.getBlockState answers AIR for a section with only air.
-		return section.hasOnlyAir() || section.getBlockState(x & 15, y & 15, z & 15).isAir();
+		if (section.hasOnlyAir()) return Blocks.AIR.defaultBlockState();
+		return section.getBlockState(x & 15, y & 15, z & 15);
 	}
 }

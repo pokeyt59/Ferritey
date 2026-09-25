@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mob-heavy server benchmark for CI, with a JFR profile of the first arm.
+# Mob-heavy server benchmark for CI, with a JFR profile taken in an unscored window.
 #
 # Boots the dev server (Lithium dropped into run/mods by the workflow),
 # builds a scene over RCON, then measures /tick query in interleaved arms:
@@ -121,7 +121,19 @@ fi
 IFS='|' read -r -a ARMS <<< "$BENCH_ARMS"
 declare -A SUM COUNT
 : > "$REPORT"
-jfr_started=0
+
+# Profile in its own window, every optimisation on, so the recording's
+# overhead lands on no scored arm. profile.jfc with Java execution
+# sampling forced to 2 ms.
+IFS=';' read -r -a on_cmds <<< "$ON"
+rcon "${on_cmds[@]}" > /dev/null
+sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(period|throttle)"([^>]*)>[^<]*</setting>#<setting name="\1"\2>2 ms</setting>#' \
+	"$JAVA_HOME/lib/jfr/profile.jfc" > bench.jfc
+grep -A4 '<event name="jdk.ExecutionSample">' bench.jfc || true
+jcmd "$GAME_PID" JFR.start name=bench settings="$PWD/bench.jfc" \
+	duration=$((SAMPLES * 5))s filename="$PWD/bench.jfr" > /dev/null
+echo "JFR recording $((SAMPLES * 5)) s with every optimisation on (unscored)"
+sleep $((SAMPLES * 5 + 5))
 
 run_arm() {
 	local spec=$1 name cmds
@@ -132,16 +144,6 @@ run_arm() {
 		rcon "${list[@]}" > /dev/null
 	fi
 	sleep 10
-	if [ "$jfr_started" = 0 ]; then
-		# profile.jfc with Java execution sampling forced to 2 ms.
-		sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(period|throttle)"([^>]*)>[^<]*</setting>#<setting name="\1"\2>2 ms</setting>#' \
-			"$JAVA_HOME/lib/jfr/profile.jfc" > bench.jfc
-		grep -A4 '<event name="jdk.ExecutionSample">' bench.jfc || true
-		jcmd "$GAME_PID" JFR.start name=bench settings="$PWD/bench.jfc" \
-			duration=$((SAMPLES * 5))s filename="$PWD/bench.jfr" > /dev/null
-		jfr_started=1
-		echo "JFR recording arm $name"
-	fi
 	for _ in $(seq "$SAMPLES"); do
 		sleep 5
 		out=$(rcon "tick query")
