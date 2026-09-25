@@ -116,11 +116,14 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
 MEMO="ferrite worldgen map-memo"
-# Rotated A/B of lazy interpolation (LazyInterpolation), everything else
-# at its default.
+# Rotated A/B of moving the chunks the server thread waits for ahead
+# (BlockingLoadBoost), everything else at its default. The last phase has
+# it on: every run explores the same seed and corridor, and earlier runs
+# froze 0.2-0.9 s there while Roguelike Dungeons waited for chunks.
 BS="ferrite worldgen biome-search"
 LI="ferrite worldgen lazy-interp"
-PHASES=${WG_PHASES:-"warmup=|li-on-1=$LI on|li-off-1=$LI off|li-off-2=|li-on-2=$LI on|li-on-3=|li-off-3=$LI off"}
+SB="ferrite worldgen sync-load-boost"
+PHASES=${WG_PHASES:-"warmup=|sb-off-1=$SB off|sb-on-1=$SB on|sb-on-2=|sb-off-2=$SB off|sb-off-3=|sb-on-3=$SB on"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -144,6 +147,7 @@ for spec in "${phase_list[@]}"; do
 	elif [ -n "$setup" ]; then
 		rcon "$setup" > /dev/null
 	fi
+	rcon "ferrite worldgen sync-load-boost reset" > /dev/null
 	echo "[$label] starts at $(date -u +%H:%M:%S) UTC" | tee -a "$REPORT"
 	[ -n "$recorded" ] || jcmd "$GAME_PID" JFR.start name=worldgen settings="$PWD/worldgen.jfc" filename="$PWD/worldgen.jfr" > /dev/null
 	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
@@ -155,6 +159,7 @@ for spec in "${phase_list[@]}"; do
 	fi
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
 		"ferrite worldgen biome-search status" "ferrite worldgen lazy-interp status" \
+		"ferrite worldgen sync-load-boost status" \
 		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done

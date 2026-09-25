@@ -76,7 +76,9 @@
 		"StructureFixTimingMixin",
 		"BiolithSearchMixin",
 		"LazyInterpolationChunkMixin",
-		"LazyInterpolatorMixin"
+		"LazyInterpolatorMixin",
+		"ChunkTaskQueueBoostMixin",
+		"SyncChunkLoadTrackMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
