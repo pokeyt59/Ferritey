@@ -3,39 +3,9 @@
 # "@list <jar-name-regex> <entry-regex>" prints matching entries of matching jars.
 # "@sig <jar-name-regex> <entry-regex> <member-regex>" prints matching member signatures.
 # Mod jars come from scripts/worldgen-mods.txt, fetched by the inspect job.
-@list [Bb]iolith (MixinClimateRTree|VanillaCompat|BiolithFittestNodes|SimpleArrayIterator|MixinMultiNoiseBiomeSource)[^/]*\.class
+# The job log keeps only its last 5000 lines: keep the list short.
+@list [Bb]iolith (MixinClimateRTree|VanillaCompat|BiolithFittestNodes|SimpleArrayIterator)[^/]*\.class
 @list ([Ff]ast.?[Nn]oise|fastnoise) (FastNoiseGen|FastBiomeGen)[^/]*\.class
-@sig ([Ff]ast.?[Nn]oise|fastnoise) .*\.class class|interface|@
+@sig ([Ff]ast.?[Nn]oise|fastnoise) .*[Mm]ixin.*\.class class|@
 @list [Rr]oguelike WorldTickGenerateRooms[^/]*\.class
-@sig [Rr]oguelike .*(WorldEditor|Column)\.class getChunk|isSolid|set\(|class
-@sig minecraft-extracted_server net/minecraft/server/level/(ChunkMap|ChunkHolder|GenerationChunkHolder|ChunkTaskDispatcher|ChunkTaskPriorityQueue|ChunkGenerationTask|ServerChunkCache|DistanceManager|ChunkLevel)\.class .
-net.minecraft.server.level.ServerChunkCache getChunk|getChunkBlocking|getChunkFutureMainThread|runDistanceManagerUpdates
-net.minecraft.server.level.ChunkTaskDispatcher [A-Za-z0-9_$<>]+
-net.minecraft.server.level.ChunkTaskPriorityQueue [A-Za-z0-9_$<>]+
-net.minecraft.server.level.ChunkHolder getQueueLevel|setQueueLevel|updateFutures|onLevelChange
-net.minecraft.server.level.ChunkMap applyStep|scheduleGenerationTask|runGenerationTask|runGenerationTasks|acquireGeneration|releaseGeneration|getChunkQueueLevel|onLevelChange|getOrCreateTicket|scheduleChunkGeneration|prepareAccessibleChunk|updateChunkScheduling
-net.minecraft.server.level.GenerationChunkHolder scheduleChunkGenerationTask|applyStep|getQueueLevel
-net.minecraft.server.level.ChunkGenerationTask [A-Za-z0-9_$<>]+
-net.minecraft.world.level.biome.Climate$RTree [A-Za-z0-9_$<>]+
-net.minecraft.world.level.biome.Climate$RTree$Node distance|<init>
-net.minecraft.world.level.biome.Climate$Parameter distance
-net.minecraft.world.level.biome.Climate$TargetPoint toParameterArray
-net.minecraft.world.level.levelgen.synth.ImprovedNoise [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.synth.PerlinNoise getValue|wrap|getOctaveNoise|<init>
-net.minecraft.world.level.levelgen.synth.SimplexNoise dot|<clinit>
-net.minecraft.world.level.levelgen.synth.NormalNoise getValue
-net.minecraft.util.Mth lerp|lerp2|lerp3|smoothstep|floor|lfloor
-net.minecraft.world.level.levelgen.NoiseChunk updateForZ|updateForX|updateForY|selectCellYZ|advanceCellX|initializeForFirstCellX|swapSlices|stopInterpolation|getInterpolatedState|fillAllDirectly
-net.minecraft.world.level.levelgen.NoiseChunk$NoiseInterpolator [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.SurfaceRules$SequenceRule [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.SurfaceRules$SequenceRuleSource apply
-net.minecraft.world.level.levelgen.SurfaceRules$TestRule [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.SurfaceRules$TestRuleSource apply
-net.minecraft.world.level.levelgen.SurfaceRules$BiomeConditionSource [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.SurfaceRules$BiomeConditionSource$1BiomeCondition [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.SurfaceRules$LazyCondition [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.SurfaceRules$LazyYCondition [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.SurfaceRules$Context updateXZ|updateY|<init>
-@sig minecraft-extracted_server net/minecraft/world/level/(levelgen/NoiseBasedChunkGenerator|chunk/ChunkGenerator|chunk/ProtoChunk|chunk/status/ChunkStatusTasks|chunk/status/WorldGenContext|chunk/status/ChunkStep|StructureManager|levelgen/blending/Blender)\.class .
-@sig minecraft-extracted_server net/minecraft/server/level/WorldGenRegion\.class <init>|class
-net.minecraft.world.level.chunk.status.ChunkStatusTasks generateBiomes|generateNoise|generateSurface
+net.minecraft.server.level.ServerChunkCache getChunk|getChunkBlocking|getChunkFutureMainThread
