@@ -42,6 +42,12 @@ public final class BlockingLoadBoost {
 	/** Chebyshev distance, in chunks, from a waited-for chunk to the tasks moved ahead. */
 	private static final int RADIUS = 8;
 	private static final long[] NONE = new long[0];
+	/**
+	 * Chunks tracked at once. A server thread blocked in a tick waits for
+	 * one; a flood of asynchronous requests through the same call (a
+	 * pregenerator) is not a wait and is left alone past this many.
+	 */
+	private static final int MAX_TRACKED = 8;
 
 	/** Packed positions of the chunks the server thread is waiting for (copy on write). */
 	private static volatile long[] waiting = NONE;
@@ -54,9 +60,8 @@ public final class BlockingLoadBoost {
 
 	/** A chunk future the server thread asked for; tracked until it completes. */
 	public static void track(long pos, CompletableFuture<?> future) {
-		if (future.isDone()) return;
+		if (future.isDone() || !add(pos)) return;
 		long start = System.nanoTime();
-		add(pos);
 		future.whenComplete((r, t) -> {
 			remove(pos);
 			long nanos = System.nanoTime() - start;
@@ -67,11 +72,13 @@ public final class BlockingLoadBoost {
 		});
 	}
 
-	private static synchronized void add(long pos) {
+	private static synchronized boolean add(long pos) {
 		long[] w = waiting;
+		if (w.length >= MAX_TRACKED) return false;
 		long[] next = Arrays.copyOf(w, w.length + 1);
 		next[w.length] = pos;
 		waiting = next;
+		return true;
 	}
 
 	private static synchronized void remove(long pos) {

@@ -59,6 +59,8 @@ public final class BiomeSearch {
 
 	private static final int ORACLE_EVERY = 64;
 	private static final int DIMS = 7;
+	/** Order the dimensions are summed in: continentalness, erosion, weirdness, temperature, humidity, depth, offset. */
+	private static final int[] ORDER = { 2, 3, 5, 0, 1, 4, 6 };
 
 	public static final LongAdder searches = new LongAdder();
 	public static final LongAdder fallbacks = new LongAdder();
@@ -356,6 +358,30 @@ public final class BiomeSearch {
 			return sum;
 		}
 
+		/**
+		 * The node distance if it is below bound, else some sum at or above
+		 * bound. Dimensions are summed most selective first and the sum stops
+		 * once it reaches bound: squares are never negative, so the partial
+		 * sum only grows, and every use of the result is a "bound > distance"
+		 * test, which comes out the same. Below bound the sum is complete and
+		 * exact (integer addition, no overflow at these magnitudes).
+		 */
+		long distanceBelow(int n, long[] p, long bound) {
+			long[] b = bounds;
+			int o = 2 * n * DIMS;
+			long sum = 0L;
+			for (int k = 0; k < DIMS; k++) {
+				int i = ORDER[k];
+				long v = p[i];
+				long above = v - b[o + 2 * i + 1];
+				long below = b[o + 2 * i] - v;
+				long d = above > 0L ? above : Math.max(below, 0L);
+				sum += d * d;
+				if (sum >= bound) return sum;
+			}
+			return sum;
+		}
+
 		/** Biolith's search, step for step, on the arrays. */
 		Object search(long[] p) throws Throwable {
 			if (firstChild[0] < 0) {
@@ -381,13 +407,13 @@ public final class BiomeSearch {
 			end[0] = endChild[0];
 			while (next[depth] < end[depth]) {
 				int n = next[depth]++;
-				long nd = distance(n, p);
+				long nd = distanceBelow(n, p, penD);
 				while (firstChild[n] >= 0 && penD > nd) {
 					depth++;
 					next[depth] = firstChild[n];
 					end[depth] = endChild[n];
 					n = next[depth]++;
-					nd = distance(n, p);
+					nd = distanceBelow(n, p, penD);
 				}
 				if (firstChild[n] < 0 && penD > nd) {
 					if (ultD > nd) {
