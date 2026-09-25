@@ -29,7 +29,10 @@ echo "candidate jars: ${#jars[@]}"
 		{ unzip -Z1 "$j" | grep -E "$ere" || true; } | while read -r entry; do
 			echo
 			echo "######## $entry  ($j)"
-			javap -c -p -classpath "$j" "${entry%.class}" || true
+			case "$entry" in
+				*.class) javap -c -p -classpath "$j" "${entry%.class}" || true ;;
+				*) unzip -p "$j" "$entry" | head -200 || true ;;
+			esac
 		done
 	done
 done
