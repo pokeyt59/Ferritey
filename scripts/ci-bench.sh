@@ -8,7 +8,7 @@
 #   town: 60 villagers in a closed pen (brains, POI lookups)
 #   boat: one parked boat, as on any real server (a hard collider in the level)
 # Arms come from BENCH_ARMS: "name=cmd;cmd|name2=cmd" (empty cmd list is
-# allowed). Each arm runs twice, interleaved, to cancel drift.
+# allowed). Each arm runs BENCH_ROUNDS times (4), interleaved, to cancel drift.
 # Extra arguments go to gradle.
 set -euo pipefail
 
@@ -16,7 +16,8 @@ LOG=bench-server.log
 REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
-SAMPLES=${BENCH_SAMPLES:-8}
+SAMPLES=${BENCH_SAMPLES:-4}
+ROUNDS=${BENCH_ROUNDS:-4}
 ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on;ferrite ai brain-cache on;ferrite ai pathtype-bypass on"
 BENCH_ARMS=${BENCH_ARMS:-"all-on=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|brain-vanilla=$ON;ferrite ai brain-cache off|pathtype-fabric=$ON;ferrite ai pathtype-bypass off"}
 
@@ -67,7 +68,10 @@ grep -A3 'Loading [0-9]* mods' "$LOG" | head -5 || true
 rcon "forceload add -32 -32 31 31" \
 	"gamerule maxEntityCramming 0" "gamerule max_entity_cramming 0" \
 	"gamerule doMobSpawning false" "gamerule spawn_mobs false" \
-	"time set midnight" > /dev/null || true
+	"time set midnight" \
+	"gamerule doDaylightCycle false" "gamerule advance_time false" > /dev/null || true
+# Villager schedules follow the time of day; a frozen clock keeps the
+# workload the same from the first arm to the last.
 sleep 20
 
 rcon "fill -31 150 -31 -1 150 -1 minecraft:stone" \
@@ -155,7 +159,7 @@ run_arm() {
 	done
 }
 
-for round in 1 2; do
+for round in $(seq "$ROUNDS"); do
 	for spec in "${ARMS[@]}"; do
 		echo "round $round arm ${spec%%=*}"
 		run_arm "$spec"
@@ -183,7 +187,7 @@ fi
 
 echo "=== /tick query samples ==="
 cat "$REPORT"
-echo "=== mspt per arm (mean of ${SAMPLES}x2 /tick query samples) ==="
+echo "=== mspt per arm (mean of ${SAMPLES}x${ROUNDS} /tick query samples) ==="
 for spec in "${ARMS[@]}"; do
 	name=${spec%%=*}
 	python3 -c "print('%-24s %6.2f ms  (n=%d)' % ('$name', ${SUM[$name]:-0} / max(${COUNT[$name]:-0}, 1), ${COUNT[$name]:-0}))"
