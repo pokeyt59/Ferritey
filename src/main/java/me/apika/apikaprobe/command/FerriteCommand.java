@@ -283,7 +283,11 @@ public final class FerriteCommand {
 						.then(Commands.literal("brain-cache")
 								.then(Commands.literal("on").executes(ctx -> setBrainCache(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setBrainCache(ctx, false)))
-								.then(Commands.literal("status").executes(ctx -> setBrainCache(ctx, null)))))
+								.then(Commands.literal("status").executes(ctx -> setBrainCache(ctx, null))))
+						.then(Commands.literal("pathtype-bypass")
+								.then(Commands.literal("on").executes(ctx -> setPathTypeBypass(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setPathTypeBypass(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setPathTypeBypass(ctx, null)))))
 				.then(Commands.literal("raycast")
 						.then(Commands.literal("air-skip")
 								.then(Commands.literal("on").executes(ctx -> setClipAirSkip(ctx, true)))
@@ -1983,6 +1987,24 @@ public final class FerriteCommand {
 				me.apika.apikaprobe.ai.BrainBehaviorCache.builds,
 				me.apika.apikaprobe.ai.BrainBehaviorCache.oracleChecks,
 				me.apika.apikaprobe.ai.BrainBehaviorCache.oracleMismatches);
+		sendFeedback(ctx, msg, on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/**
+	 * /ferrite ai pathtype-bypass on|off|status: whether path type lookups
+	 * skip Fabric API's hook while no mod registered a path type. Session
+	 * only; -Dferrite.ai.pathtypebypass=false sets the boot default.
+	 */
+	private static int setPathTypeBypass(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.ai.FabricPathTypeBypass.ENABLED = on;
+		}
+		String msg = String.format("[pathtype-bypass] pathtype-bypass=%s bypassed=%d, %s",
+				me.apika.apikaprobe.ai.FabricPathTypeBypass.ENABLED ? "on" : "off",
+				me.apika.apikaprobe.ai.FabricPathTypeBypass.bypassed,
+				me.apika.apikaprobe.ai.FabricPathTypeBypass.status());
 		sendFeedback(ctx, msg, on != null);
 		return Command.SINGLE_SUCCESS;
 	}

@@ -17,8 +17,8 @@ REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
 SAMPLES=${BENCH_SAMPLES:-8}
-ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on;ferrite ai brain-cache on"
-BENCH_ARMS=${BENCH_ARMS:-"all-on=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|index-off=$ON;ferrite entityquery index off|brain-vanilla=$ON;ferrite ai brain-cache off"}
+ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on;ferrite ai brain-cache on;ferrite ai pathtype-bypass on"
+BENCH_ARMS=${BENCH_ARMS:-"all-on=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|brain-vanilla=$ON;ferrite ai brain-cache off|pathtype-fabric=$ON;ferrite ai pathtype-bypass off"}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
@@ -167,6 +167,8 @@ airskip=$(rcon "ferrite raycast air-skip status")
 echo "$airskip"
 braincache=$(rcon "ferrite ai brain-cache status")
 echo "$braincache"
+pathtype=$(rcon "ferrite ai pathtype-bypass status")
+echo "$pathtype"
 rcon "stop" > /dev/null || true
 wait "$PID" || true
 
@@ -196,3 +198,4 @@ fi
 # require = 0, so make sure it applied and ran.
 echo "$airskip" | grep -q 'rays=[1-9]' || { echo "::error::raycast air-skip never ran"; exit 1; }
 echo "$braincache" | grep -q 'uses=[1-9]' || { echo "::error::brain cache never ran"; exit 1; }
+echo "$pathtype" | grep -q 'bypassed=[1-9]' || { echo "::error::path type bypass never ran"; exit 1; }
