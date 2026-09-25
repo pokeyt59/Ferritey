@@ -174,6 +174,11 @@ if [ "${WG_RESTART:-1}" = 1 ]; then
 	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
 		"$x" "$WIDTH" "$STEP" "$DURATION" "after-restart" | tee -a "$REPORT" || explore_failed=1
 	rcon "ferrite worldgen structure-dfu status" | sed 's/^/[after-restart] /' | tee -a "$REPORT"
+	# Then check every cache hit against a fresh upgrade.
+	rcon "ferrite worldgen structure-dfu cache verify on" > /dev/null
+	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
+		"$((x + 200))" "$WIDTH" "$STEP" "$DURATION" "verify" | tee -a "$REPORT" || explore_failed=1
+	rcon "ferrite worldgen structure-dfu status" | sed 's/^/[verify] /' | tee -a "$REPORT"
 	rcon "stop" > /dev/null || true
 	wait "$PID" || true
 	if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Critical injection failure|MixinApplyError' "$LOG"; then

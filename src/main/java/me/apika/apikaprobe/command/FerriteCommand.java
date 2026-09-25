@@ -122,7 +122,10 @@ public final class FerriteCommand {
 								.then(Commands.literal("status").executes(ctx -> structureDfu(ctx, null)))
 								.then(Commands.literal("cache")
 										.then(Commands.literal("on").executes(ctx -> structureDfu(ctx, true)))
-										.then(Commands.literal("off").executes(ctx -> structureDfu(ctx, false)))))
+										.then(Commands.literal("off").executes(ctx -> structureDfu(ctx, false)))
+										.then(Commands.literal("verify")
+												.then(Commands.literal("on").executes(ctx -> structureDfuVerify(ctx, true)))
+												.then(Commands.literal("off").executes(ctx -> structureDfuVerify(ctx, false))))))
 						.then(Commands.literal("map-memo")
 								.then(Commands.literal("on").executes(ctx -> setMapMemo(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setMapMemo(ctx, false)))
@@ -2084,6 +2087,12 @@ public final class FerriteCommand {
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.StructureFixTiming.status() + "\n"
 				+ me.apika.apikaprobe.worldgen.StructureFixCache.status(), cache != null);
 		return Command.SINGLE_SUCCESS;
+	}
+
+	private static int structureDfuVerify(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, boolean on) {
+		me.apika.apikaprobe.worldgen.StructureFixCache.VERIFY = on;
+		return structureDfu(ctx, null);
 	}
 
 	/** /ferrite worldgen map-memo on|off|status: MappingMemo, for A/B. */

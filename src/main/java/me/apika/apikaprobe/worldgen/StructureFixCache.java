@@ -41,9 +41,12 @@ import net.minecraft.nbt.NbtIo;
  * are deleted. A hit reads the upgraded template back; NBT round-trips
  * exactly. Files are written to a temporary name and moved into place.
  *
- * Oracle: every ORACLE_EVERY-th hit, the first included, upgrades the
- * template anyway and compares; a mismatch deletes the entry and keeps the
- * fresh upgrade.
+ * Verification (off by default, since a check is a full upgrade and the
+ * first one pays the fixers' warm-up of seconds): with it on, every hit
+ * also upgrades the template and compares; a mismatch deletes the entry
+ * and keeps the fresh upgrade. The CI worldgen bench runs with it on.
+ * -Dferrite.worldgen.structurecache.verify=true or
+ * /ferrite worldgen structure-dfu cache verify on.
  *
  * .ferrite/structure-dfu in the server directory.
  * Off: -Dferrite.worldgen.structurecache=false or
@@ -54,7 +57,7 @@ public final class StructureFixCache {
 
 	public static volatile boolean ENABLED = !"false".equals(System.getProperty("ferrite.worldgen.structurecache"));
 
-	private static final int ORACLE_EVERY = 32;
+	public static volatile boolean VERIFY = Boolean.getBoolean("ferrite.worldgen.structurecache.verify");
 	private static final AtomicLong hits = new AtomicLong();
 	private static final AtomicLong misses = new AtomicLong();
 	private static final AtomicLong failures = new AtomicLong();
@@ -87,7 +90,8 @@ public final class StructureFixCache {
 				failures.incrementAndGet();
 			}
 			if (cached != null) {
-				if (hits.getAndIncrement() % ORACLE_EVERY != 0) return cached;
+				hits.incrementAndGet();
+				if (!VERIFY) return cached;
 				CompoundTag fresh = upgrade.get();
 				oracleChecks.incrementAndGet();
 				if (!fresh.equals(cached)) {
@@ -170,8 +174,8 @@ public final class StructureFixCache {
 	}
 
 	public static String status() {
-		return String.format("[structure-dfu] cache=%s hits=%d misses=%d failures=%d oracleChecks=%d oracleMismatches=%d%s",
-				ENABLED ? "on" : "off", hits.get(), misses.get(), failures.get(),
+		return String.format("[structure-dfu] cache=%s verify=%s hits=%d misses=%d failures=%d oracleChecks=%d oracleMismatches=%d%s",
+				ENABLED ? "on" : "off", VERIFY ? "on" : "off", hits.get(), misses.get(), failures.get(),
 				oracleChecks.get(), oracleMismatches.get(), dir == null ? "" : " dir=" + dir);
 	}
 }
