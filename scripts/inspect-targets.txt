@@ -4,6 +4,10 @@
 # "@sig <jar-name-regex> <entry-regex> <member-regex>" prints matching member signatures.
 # Mod jars come from scripts/worldgen-mods.txt, fetched by the inspect job.
 # The job log keeps only its last 5000 lines: keep the list short.
-@sig [Ll]ithium .*\.class getChunkBlocking
-@list [Ll]ithium .*/(ServerChunkCache|ServerChunkManager)[A-Za-z]*Mixin\.class
-@sig minecraft-extracted_server net/minecraft/server/level/ServerChunkCache\.class .
+@sig minecraft-extracted_server net/minecraft/world/level/chunk/ProtoChunk\.class ProtoChunk\(
+@sig minecraft-extracted_server net/minecraft/world/level/levelgen/NoiseChunk\.class forChunk|NoiseChunk\(
+@sig minecraft-extracted_server net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator\.class .
+@sig minecraft-extracted_server net/minecraft/world/level/levelgen/blending/Blender\.class empty|of\(
+@sig minecraft-extracted_server net/minecraft/world/level/levelgen/DensityFunctions\$BeardifierMarker\.class .
+@sig minecraft-extracted_server net/minecraft/world/level/chunk/PalettedContainerFactory\.class .
+net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator doFill|createNoiseChunk|fillFromNoise
