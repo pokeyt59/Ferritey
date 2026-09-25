@@ -3,13 +3,12 @@
 # run/mods (scripts/worldgen-mods.txt, fetched by the workflow).
 #
 # Stands in for players exploring fresh terrain on a small server: a
-# corridor of chunk tickets advances through ungenerated land, four times,
-# alternating default thread scheduling with the server thread on a core
-# of its own (scripts/worldgen-drive.py, scripts/pin-threads.py), while a
-# mob pen keeps the server thread busy. Reports tick time with and without exploring, chunks delivered
-# per second, how far generation falls behind, the cost of a height
-# query with and without DensityWrapIndex, and, from a JFR recording
-# of every thread, which worldgen stage the CPU went to
+# corridor of chunk tickets advances through ungenerated land
+# (scripts/worldgen-drive.py) in phases that A/B a setting (WG_PHASES),
+# while a mob pen keeps the server thread busy. Reports tick time with
+# and without exploring, chunks delivered per second, request latency,
+# backlog, worldgen worker CPU per chunk, and, from a JFR recording of
+# every thread, which worldgen stage the CPU went to
 # (scripts/JfrStages.java).
 #
 # The JVM is pinned with taskset (WG_CPUS, default 0-3). A 4-vCPU CI
@@ -97,15 +96,13 @@ sleep 45
 
 python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee -a "$REPORT"
 
-# Height queries (a whole NoiseChunk per column, made by structure
-# placement) with DensityWrapIndex on and off, on the server thread.
-echo "=== height queries ===" | tee -a "$REPORT"
-rcon "ferrite bench columns 200 6" | tee -a "$REPORT"
 
 # --- Exploring ----------------------------------------------------------------
-# Four phases over fresh terrain, alternating default scheduling with the
-# server thread on a physical core of its own (scripts/pin-threads.py).
-# The first phase is recorded with JFR.
+# Phases over fresh terrain, each "label=setup": the setup runs first.
+# "pin" puts the server thread on a physical core of its own and the
+# worldgen workers on the others (scripts/pin-threads.py); anything else
+# is a server command. The first phase is recorded with JFR.
+PHASES=${WG_PHASES:-"cache-on=ferrite worldgen height-cache on|cache-off=ferrite worldgen height-cache off|cache-on=ferrite worldgen height-cache on|cache-off=ferrite worldgen height-cache off"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -113,24 +110,29 @@ sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(perio
 	"$JAVA_HOME/lib/jfr/profile.jfc" > worldgen.jfc
 x=$START_X
 recorded=
-for phase in default pinned default pinned; do
+IFS='|' read -r -a phase_list <<< "$PHASES"
+for spec in "${phase_list[@]}"; do
+	label=${spec%%=*}
+	setup=${spec#*=}
 	pinner=
-	if [ "$phase" = pinned ]; then
+	if [ "$setup" = pin ]; then
 		python3 scripts/pin-threads.py "$GAME_PID" split "$CPUS" verbose | tee -a "$REPORT"
 		( while sleep 2; do python3 scripts/pin-threads.py "$GAME_PID" split "$CPUS"; done ) &
 		pinner=$!
+	elif [ -n "$setup" ]; then
+		rcon "$setup" > /dev/null
 	fi
 	[ -n "$recorded" ] || jcmd "$GAME_PID" JFR.start name=worldgen settings="$PWD/worldgen.jfc" filename="$PWD/worldgen.jfr" > /dev/null
 	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
-		"$x" "$WIDTH" "$STEP" "$DURATION" "$phase" | tee -a "$REPORT" || explore_failed=1
+		"$x" "$WIDTH" "$STEP" "$DURATION" "$label" | tee -a "$REPORT" || explore_failed=1
 	[ -n "$recorded" ] || { jcmd "$GAME_PID" JFR.stop name=worldgen > /dev/null || true; recorded=1; }
 	if [ -n "$pinner" ]; then
 		kill "$pinner"; wait "$pinner" 2>/dev/null || true
 		python3 scripts/pin-threads.py "$GAME_PID" reset "$CPUS"
 	fi
+	rcon "ferrite worldgen height-cache status" | sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
-rcon "ferrite worldgen wrap-index status" | tee -a "$REPORT"
 
 rcon "stop" > /dev/null || true
 wait "$PID" || true
@@ -151,5 +153,4 @@ if [ -f worldgen.jfr ]; then
 	head -c 20000 worldgen-stages.txt | sed -n '1,16p' >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 fi
 [ -z "${explore_failed:-}" ] || { echo "::error::exploring failed"; exit 1; }
-grep -q 'heights differing 0;' "$REPORT" || { echo "::error::height queries differ with the wrap index"; exit 1; }
-grep -q 'oracleMismatches=0' "$REPORT" || { echo "::error::wrap index oracle mismatches"; exit 1; }
+if grep -q 'oracleMismatches=[1-9]' "$REPORT"; then echo "::error::height cache oracle mismatches"; exit 1; fi

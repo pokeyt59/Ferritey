@@ -70,7 +70,7 @@
 		"ChunkStageTimingMixin",
 		"AbstractConsecutiveExecutorDurationMixin",
 		"AquiferRouteMixin",
-		"NoiseChunkWrapIndexMixin"
+		"BaseHeightCacheMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

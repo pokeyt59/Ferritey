@@ -40,6 +40,17 @@ public class JfrStages {
 		STAGES.put("chunk io", new String[] {"RegionFile", "IOWorker", "SerializableChunkData", "ChunkSerializer", "NbtIo"});
 		STAGES.put("entity ticking", new String[] {"EntityTickList.forEach"});
 	}
+	/**
+	 * Frames whose inclusive share of the workers' samples is reported:
+	 * a sample counts once for each of these on its stack.
+	 */
+	private static final String[] INCLUSIVE = {
+		"NoiseChunk.<init>", "NoiseChunk.forChunk", "NoiseBasedChunkGenerator.iterateNoiseColumn",
+		"NoiseBasedChunkGenerator.getBaseHeight", "NoiseBasedChunkGenerator.getBaseColumn",
+		"NoiseChunk.wrap", "NoiseChunk.cachedClimateSampler", "Climate$RTree", "Climate$Sampler.sample",
+		"BiomeManager.getBiome", "SurfaceSystem.buildSurface", "Beardifier.compute", "Aquifer",
+		"JigsawPlacement", "JigsawStructure", "StructureTemplate", "PlacedFeature.place",
+	};
 	private static final String[] CHUNK_SYSTEM = {"ChunkMap.", "ChunkHolder.", "ChunkStep", "ServerChunkCache.", "ChunkTaskDispatcher", "ChunkResult"};
 
 	public static void main(String[] args) throws Exception {
@@ -49,6 +60,8 @@ public class JfrStages {
 		// Worker self frame -> caller chain -> samples, to tell apart the
 		// callers of generic frames such as Objects.hashCode.
 		Map<String, Map<String, Integer>> workerCallers = new TreeMap<>();
+		Map<String, Integer> workerInclusive = new LinkedHashMap<>();
+		for (String marker : INCLUSIVE) workerInclusive.put(marker, 0);
 		Map<String, Integer> otherEntries = new TreeMap<>();
 		List<String> gcPauses = new ArrayList<>();
 		List<long[]> gcNanos = new ArrayList<>();
@@ -101,6 +114,14 @@ public class JfrStages {
 				if (group.equals("worldgen workers")) {
 					workerCallers.computeIfAbsent(name(frames.get(0)), k -> new TreeMap<>())
 							.merge(callers(frames), 1, Integer::sum);
+					for (String marker : INCLUSIVE) {
+						for (RecordedFrame f : frames) {
+							if (name(f).contains(marker)) {
+								workerInclusive.merge(marker, 1, Integer::sum);
+								break;
+							}
+						}
+					}
 				}
 			}
 		}
@@ -167,6 +188,14 @@ public class JfrStages {
 			list.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
 			for (Map.Entry<String, Integer> e : list.subList(0, Math.min(15, list.size()))) {
 				System.out.printf("%6.2f%%  %6d  %s%n", 100.0 * e.getValue() / groupTotals.get(g), e.getValue(), e.getKey());
+			}
+		}
+
+		Integer workerTotal = groupTotals.get("worldgen workers");
+		if (workerTotal != null) {
+			System.out.println("\n=== worldgen workers: samples with the frame on the stack ===");
+			for (Map.Entry<String, Integer> e : workerInclusive.entrySet()) {
+				System.out.printf("%6.2f%%  %6d  %s%n", 100.0 * e.getValue() / workerTotal, e.getValue(), e.getKey());
 			}
 		}
 

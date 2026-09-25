@@ -98,7 +98,7 @@ def summarize(label, samples):
     print(line + f"  (n={len(samples)})")
 
 
-STATUS = re.compile(r"requested=(\d+) done=(\d+) failed=(\d+) latency_ms median=(\d+) p90=(\d+) max=(\d+)")
+STATUS = re.compile(r"requested=(\d+) done=(\d+) failed=(\d+) latency_ms median=(\d+) p90=(\d+) max=(\d+) worker_cpu_ms=(-?\d+)")
 
 
 def status(r):
@@ -117,6 +117,7 @@ def explore(r, start, width, step, duration, label=""):
     z0 = -(width // 2)
     z1 = z0 + width - 1
     r.cmd("ferrite bench explore reset")
+    cpu0 = status(r)[6]
     t0 = time.monotonic()
     next_step = t0
     next_sample = t0 + 5
@@ -142,7 +143,7 @@ def explore(r, start, width, step, duration, label=""):
             break
         time.sleep(0.5)
     drain = time.monotonic() - explore_end
-    requested, done, failed, median, p90, worst = status(r)
+    requested, done, failed, median, p90, worst, cpu1 = status(r)
 
     summarize(f"{tag}exploring", samples)
     total = time.monotonic() - t0
@@ -151,6 +152,8 @@ def explore(r, start, width, step, duration, label=""):
     print(f"{tag}delivered {done_while_exploring} while exploring ({done_while_exploring / duration:.2f} chunks/s), "
           f"{done} in {total:.0f} s with the drain ({drain:.0f} s): {done / total:.2f} chunks/s; {failed} failed")
     print(f"{tag}chunk latency, request to loaded: median {median} ms  p90 {p90} ms  max {worst} ms")
+    if done and cpu0 >= 0:
+        print(f"{tag}worldgen worker cpu: {cpu1 - cpu0} ms, {(cpu1 - cpu0) / done:.1f} ms per chunk delivered")
     if backlogs:
         print(f"{tag}backlog (requested, not yet loaded): mean {statistics.mean(backlogs):.0f} chunks, "
               f"max {max(backlogs)} chunks ({max(backlogs) / width:.1f} columns behind the head)")

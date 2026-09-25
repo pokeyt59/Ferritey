@@ -1,8 +1,13 @@
 package me.apika.apikaprobe.worldgen.chunk;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
+import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import me.apika.apikaprobe.bridge.ExampleMod;
@@ -26,6 +31,8 @@ import net.minecraft.world.level.ChunkPos;
  * as Ferrite's pregen ({@link ChunkForcer}), and the time from request to
  * loaded chunk is recorded.
  *
+ * Status also reports the worldgen workers' CPU time, for CPU per chunk.
+ *
  * /ferrite bench explore add|status|reset. Nothing runs unless the
  * command is used.
  */
@@ -37,6 +44,8 @@ public final class ExploreBench {
 	private static final AtomicLong done = new AtomicLong();
 	private static final AtomicLong failed = new AtomicLong();
 	private static final List<Long> latenciesMs = Collections.synchronizedList(new ArrayList<>());
+	/** Last CPU time seen per worldgen worker thread; kept after a worker ends. */
+	private static final Map<Long, Long> workerCpuNanos = new HashMap<>();
 
 	public static void register() {
 		// Same shape as ChunkForcer's ticket: loads to FULL, expires 80 ticks
@@ -81,8 +90,26 @@ public final class ExploreBench {
 		long median = lat.isEmpty() ? 0 : lat.get(lat.size() / 2);
 		long p90 = lat.isEmpty() ? 0 : lat.get((int) (0.9 * (lat.size() - 1)));
 		long max = lat.isEmpty() ? 0 : lat.get(lat.size() - 1);
-		return String.format("[explore-bench] requested=%d done=%d failed=%d latency_ms median=%d p90=%d max=%d",
-				requested.get(), done.get(), failed.get(), median, p90, max);
+		return String.format("[explore-bench] requested=%d done=%d failed=%d latency_ms median=%d p90=%d max=%d worker_cpu_ms=%d",
+				requested.get(), done.get(), failed.get(), median, p90, max, workerCpuMillis());
+	}
+
+	/**
+	 * CPU time of the worldgen worker threads ("Worker-*") since the JVM
+	 * started, including workers the pool has since retired: the bench
+	 * takes the difference over a phase, per chunk delivered.
+	 */
+	private static synchronized long workerCpuMillis() {
+		ThreadMXBean mx = ManagementFactory.getThreadMXBean();
+		if (!mx.isThreadCpuTimeSupported()) return -1;
+		for (ThreadInfo info : mx.getThreadInfo(mx.getAllThreadIds())) {
+			if (info == null || !info.getThreadName().startsWith("Worker-")) continue;
+			long cpu = mx.getThreadCpuTime(info.getThreadId());
+			if (cpu > 0) workerCpuNanos.put(info.getThreadId(), cpu);
+		}
+		long total = 0;
+		for (long cpu : workerCpuNanos.values()) total += cpu;
+		return total / 1_000_000L;
 	}
 
 	public static void reset() {
