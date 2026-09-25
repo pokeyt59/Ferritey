@@ -38,6 +38,8 @@
 		"EntitySectionMixin",
 		"EntitySectionStorageMixin",
 		"EntitySectionOriginMixin",
+		"ServerLevelEntityManagerAccessor",
+		"PersistentEntitySectionManagerAccessor",
 		"TransientEntitySectionCallbackMixin",
 		"GoalSelectorMixin",
 		"MoveControlMixin",

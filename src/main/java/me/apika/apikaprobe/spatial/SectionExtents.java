@@ -24,5 +24,8 @@ public interface SectionExtents {
 
 	SectionGrid ferrite$grid();
 
+	/** Members that can be collided with (see ColliderSkip.isHardCollider). */
+	int ferrite$hardColliders();
+
 	void ferrite$setGrid(SectionGrid grid);
 }

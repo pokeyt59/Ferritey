@@ -41,6 +41,7 @@ public abstract class EntitySectionMixin implements SectionExtents {
 	@Unique private int ferrite$originY;
 	@Unique private int ferrite$originZ;
 	@Unique private me.apika.apikaprobe.spatial.SectionGrid ferrite$grid;
+	@Unique private int ferrite$hardColliders;
 
 	/** Sections at or above this many entities get a bitset grid. */
 	@Unique private static final int GRID_MIN = 32;
@@ -81,6 +82,11 @@ public abstract class EntitySectionMixin implements SectionExtents {
 	}
 
 	@Override
+	public int ferrite$hardColliders() {
+		return ferrite$hardColliders;
+	}
+
+	@Override
 	public float ferrite$maxHalfXZ() {
 		return ferrite$maxHalfXZ;
 	}
@@ -104,6 +110,9 @@ public abstract class EntitySectionMixin implements SectionExtents {
 		}
 		AABB bb = entity.getBoundingBox();
 		ferrite$growExtents((float) (Math.max(bb.getXsize(), bb.getZsize()) * 0.5), (float) bb.getYsize());
+		if (me.apika.apikaprobe.spatial.ColliderSkip.isHardCollider(entity)) {
+			ferrite$hardColliders++;
+		}
 		if (ferrite$grid != null) {
 			// Appended at list tail: index = size before this add.
 			ferrite$grid.onAdd(entity, ferrite$list().size(), packed);
@@ -115,6 +124,13 @@ public abstract class EntitySectionMixin implements SectionExtents {
 		if (ferrite$grid != null) {
 			// List indices shift; rebuild lazily on next query.
 			ferrite$grid.markDirty();
+		}
+	}
+
+	@Inject(method = "remove", at = @At("RETURN"))
+	private void ferrite$countRemoved(EntityAccess entity, CallbackInfoReturnable<Boolean> cir) {
+		if (cir.getReturnValueZ() && me.apika.apikaprobe.spatial.ColliderSkip.isHardCollider(entity)) {
+			ferrite$hardColliders--;
 		}
 	}
 

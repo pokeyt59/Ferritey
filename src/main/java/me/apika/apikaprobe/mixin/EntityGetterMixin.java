@@ -24,7 +24,7 @@ public interface EntityGetterMixin {
 		if (!ColliderSkip.ENABLED) return;
 		if (!((Object) this instanceof ServerLevel level)) return;
 		if (source != null && ColliderSkip.isWideningSource(source)) return;
-		if (ColliderSkip.levelHasHardColliders(level)) return;
+		if (ColliderSkip.regionHasHardColliders(level, testArea)) return;
 		ColliderSkip.eligible++;
 		if (ColliderSkip.ORACLE_RATE > 0
 				&& ++ColliderSkip.sampleCounter % ColliderSkip.ORACLE_RATE == 0) {
@@ -44,7 +44,7 @@ public interface EntityGetterMixin {
 		// Only meaningful for the sampled fall-throughs: a skip-eligible
 		// query whose vanilla walk found something is a correctness bug.
 		if (source != null && ColliderSkip.isWideningSource(source)) return;
-		if (ColliderSkip.levelHasHardColliders(level)) return;
+		if (ColliderSkip.regionHasHardColliders(level, testArea)) return;
 		if (!cir.getReturnValue().isEmpty()) {
 			ColliderSkip.oracleNonEmpty++;
 			me.apika.apikaprobe.bridge.ExampleMod.LOGGER.warn(

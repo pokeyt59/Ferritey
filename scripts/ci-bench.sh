@@ -6,6 +6,7 @@
 #   pen:  400 husks spread over a 28x28 pen (AI, pathing, movement)
 #   pile: 150 husks in a 2x2 cell with cramming damage off (push pairs)
 #   town: 60 villagers in a closed pen (brains, POI lookups)
+#   boat: one parked boat, as on any real server (a hard collider in the level)
 # Arms come from BENCH_ARMS: "name=cmd;cmd|name2=cmd" (empty cmd list is
 # allowed). Each arm runs twice, interleaved, to cancel drift.
 # Extra arguments go to gradle.
@@ -16,7 +17,7 @@ REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
 SAMPLES=${BENCH_SAMPLES:-8}
-BENCH_ARMS=${BENCH_ARMS:-"typed-grid=ferrite entityquery typed-grid on|typed-linear=ferrite entityquery typed-grid off"}
+BENCH_ARMS=${BENCH_ARMS:-"all-on=ferrite entityquery typed-grid on;ferrite entityquery collider-sections on|typed-linear=ferrite entityquery typed-grid off;ferrite entityquery collider-sections on|collider-level-wide=ferrite entityquery typed-grid on;ferrite entityquery collider-sections off"}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
@@ -93,7 +94,8 @@ for _ in $(seq 60); do
 	town+=("summon minecraft:villager $x.5 152 $z.5 {PersistenceRequired:1b}")
 done
 rcon "${town[@]}" | sort | uniq -c
-rcon "execute if entity @e[type=minecraft:husk]" "execute if entity @e[type=minecraft:villager]"
+rcon "summon minecraft:oak_boat -15.5 152 -15.5" \
+	"execute if entity @e[type=minecraft:husk]" "execute if entity @e[type=minecraft:villager]"
 
 echo "warming up (JIT, pathing)"
 sleep 60
@@ -151,8 +153,8 @@ wait "$PID" || true
 if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Critical injection failure|MixinApplyError' "$LOG"; then
 	fail "mixin errors in the server log"
 fi
-grep '\[entity-query-cache\]' "$LOG" | tail -4 || true
-if grep -q 'GRID MISMATCH\|filter skipped intersecting' "$LOG"; then
+grep '\[entity-query-cache\]\|\[collider-skip\]' "$LOG" | tail -6 || true
+if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH' "$LOG"; then
 	grep 'MISMATCH' "$LOG" | head -5
 	fail "entity query oracle mismatches"
 fi

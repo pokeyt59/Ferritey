@@ -270,7 +270,11 @@ public final class FerriteCommand {
 						.then(Commands.literal("typed-grid")
 								.then(Commands.literal("on").executes(ctx -> setTypedGrid(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setTypedGrid(ctx, false)))
-								.then(Commands.literal("status").executes(ctx -> setTypedGrid(ctx, null)))))
+								.then(Commands.literal("status").executes(ctx -> setTypedGrid(ctx, null))))
+						.then(Commands.literal("collider-sections")
+								.then(Commands.literal("on").executes(ctx -> setColliderSections(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setColliderSections(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setColliderSections(ctx, null)))))
 				.then(Commands.literal("prechunk")
 						.then(Commands.literal("on").executes(ctx -> setPrechunk(ctx, true)))
 						.then(Commands.literal("off").executes(ctx -> setPrechunk(ctx, false)))
@@ -1909,6 +1913,24 @@ public final class FerriteCommand {
 		String msg = String.format("[entity-query-cache] typed-grid=%s (index %s)",
 				me.apika.apikaprobe.spatial.EntityCellIndex.TYPED_GRID ? "on" : "off",
 				me.apika.apikaprobe.spatial.EntityCellIndex.ENABLED ? "on" : "off");
+		sendFeedback(ctx, msg, on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/**
+	 * /ferrite entityquery collider-sections on|off|status: whether the
+	 * collider skip checks hard colliders per entity section (on) or
+	 * stands down for the whole level once one exists (off). Session only;
+	 * -Dferrite.entityquery.collidersections=false sets the boot default.
+	 */
+	private static int setColliderSections(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.spatial.ColliderSkip.PER_SECTION = on;
+		}
+		String msg = String.format("[collider-skip] per-section=%s (skip %s)",
+				me.apika.apikaprobe.spatial.ColliderSkip.PER_SECTION ? "on" : "off",
+				me.apika.apikaprobe.spatial.ColliderSkip.ENABLED ? "on" : "off");
 		sendFeedback(ctx, msg, on != null);
 		return Command.SINGLE_SUCCESS;
 	}
