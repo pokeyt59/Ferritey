@@ -24,6 +24,18 @@ The hopper highway and world-creation pre-gen are default-off opt-ins. They work
 
 ## Measured results
 
+### CI bench on 26.2 with Lithium
+
+Every push tagged `[bench]` boots a dedicated server with Lithium, fills it with 1000 husks (a spread pen and a 200-mob pile), 60 villagers behind glass and a parked boat, and measures `/tick query` with one Ferrite switch flipped per arm. Arms run in an order that rotates each round, so each takes every position once. Five rounds, same runner:
+
+| switch off (vs shipped defaults) | ms/tick added | rounds where the switch won |
+| --- | --- | --- |
+| Rust cramming batch (vanilla `pushEntities` instead) | +3.62 | 5 of 5 |
+| Line-of-sight air skip | +0.56 | 5 of 5 |
+| Fabric path type hook bypass | +0.11 | 4 of 5 |
+
+With every switch on the scene ran at 10.07 ms/tick on that runner. Oracles compare sampled results with vanilla's (or Lithium's) on every bench; they have found no difference. `scripts/ci-bench.sh` and the `bench` job in `.github/workflows/build.yml` hold the setup.
+
 ### Cramming (1000+ active mobs)
 
 | metric                | vanilla | Ferrite | reduction               |
