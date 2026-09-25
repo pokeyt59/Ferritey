@@ -81,10 +81,14 @@ marks pre-release research builds.
   warmed up. The upgraded templates are now cached on disk, keyed on
   the template's bytes and data versions, in a directory tied to the
   exact set of loaded mods and versions. Any mod change starts a new
-  cache and old ones are deleted. After a restart, 69 of 69 upgrades at
-  startup and 454 of 542 while exploring fresh terrain came from the
-  cache. The rest were templates not seen before. Compared against a
-  fresh upgrade: no difference. `.ferrite/structure-dfu` in the server
+  cache and old ones are deleted. After a restart:
+  - at startup, 69 of 69 upgrades came from the cache, 0.4 s in all
+    (6 ms each, against 60-70 ms uncached);
+  - while exploring fresh terrain, 454 of 542 did, and the 6.9 s total
+    went mostly to the 88 templates not seen before.
+
+  With verification on, 70 cached templates were compared with fresh
+  upgrades: no difference. `.ferrite/structure-dfu` in the server
   directory. `/ferrite worldgen structure-dfu status|cache on|off|cache
   verify on|off`, `-Dferrite.worldgen.structurecache=false`.
 - **Terrain height queries are remembered.** Structure placement asks
