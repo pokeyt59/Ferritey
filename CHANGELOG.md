@@ -39,6 +39,14 @@ marks pre-release research builds.
   1.9-3.4 s against 0.5-2.0 s. It trades generation speed for tick
   time, so it stays off. `/ferrite worldgen isolate-server-core
   on|off|status` (saved), `-Dferrite.affinity.servercore=true`.
+- **Slow tick watchdog.** `/ferrite tickwatch <ms>|off|status` samples
+  the server thread's stack every 10 ms while a tick runs past `<ms>`,
+  and logs a `[slow-tick]` line with the gap and the most common stacks.
+  It sees waits that execution samples miss. On the worldgen bench it
+  found the only ticks over 100 ms in seven minutes of exploring: 360,
+  556 and 173 ms while Roguelike Dungeons built a dungeon on the server
+  thread, placing blocks with neighbour updates and waiting on
+  `ServerChunkCache.getChunkBlocking` for chunks around it to generate.
 
 ### Changed
 - **Noise router mapped once per node.** Every `NoiseChunk` (one per
