@@ -72,6 +72,21 @@ marks pre-release research builds.
   same object comes back: 5,775,553 checks, no mismatch.
   `/ferrite worldgen map-memo on|off|status`,
   `-Dferrite.worldgen.mapmemo=false`.
+- **Upgraded structure templates are kept between starts.** Mods ship
+  structure templates saved by older game versions. The game upgrades
+  each one through DataFixerUpper the first time it loads after every
+  start. On the CI worldgen bench that was 1,020 templates and 37-43 s
+  of worldgen CPU in the first eight minutes after a start, 22-27 s of
+  it during startup, and single templates took 2-3 s while the fixers
+  warmed up. The upgraded templates are now cached on disk, keyed on
+  the template's bytes and data versions, in a directory tied to the
+  exact set of loaded mods and versions. Any mod change starts a new
+  cache and old ones are deleted. After a restart, 69 of 69 upgrades at
+  startup and 454 of 542 while exploring fresh terrain came from the
+  cache. The rest were templates not seen before. Compared against a
+  fresh upgrade: no difference. `.ferrite/structure-dfu` in the server
+  directory. `/ferrite worldgen structure-dfu status|cache on|off|cache
+  verify on|off`, `-Dferrite.worldgen.structurecache=false`.
 - **Terrain height queries are remembered.** Structure placement asks
   the generator for terrain heights at every structure start and for
   terrain-following jigsaw pieces. Each query builds a whole `NoiseChunk`

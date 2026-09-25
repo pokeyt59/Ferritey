@@ -357,6 +357,30 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   biome route in front of that call would bypass Biolith, so the route
   stays removed; the Rust state still answers `/ferrite biome` diagnostics,
   which will not show Biolith's placements.
+- **Worldgen mods on the CI worldgen bench** (Terralith, Biolith,
+  Lithostitched, Climate Rivers, Deeper Oceans, Fast Noise, ScalableLux,
+  Lithium and structure mods; `scripts/worldgen-mods.txt`). Ferrite's
+  default worldgen hooks sit on vanilla calls every one of them goes
+  through:
+  - the noise router mapping memo, around `mapAll` calls in `NoiseChunk`
+    and `DensityFunction`'s local `RecursiveVisitor.apply`;
+  - the height cache, wrapping `NoiseBasedChunkGenerator.getBaseHeight`;
+  - the structure template cache, wrapping
+    `DataFixTypes.update(DataFixer, CompoundTag, int, int)` for
+    `STRUCTURE` only.
+
+  All three are `require = 0` and stand down if another mod replaces
+  the target. Their oracles ran clean with this mod list (the mapping
+  memo over 5.7 million checks). Fast Noise replaces `populateNoise` and
+  `populateBiomes` itself, and none of these hooks sit on those paths.
+- **Roguelike Dungeons.** It builds each dungeon on the server thread:
+  it places blocks with neighbour updates and reads blocks around the
+  dungeon, and when those chunks are not generated yet,
+  `ServerChunkCache.getChunkBlocking` makes the server thread wait for
+  them. On the CI bench one dungeon froze ticks for 0.2-0.6 s at a time.
+  That is the mod's design, not something Ferrite can speed up exactly.
+  Pregenerating the world (Chunky) moves those stalls to the pregen run,
+  and `/ferrite tickwatch 100` shows them in the log.
 - **spark.** With spark installed Ferrite runs in lean mode: the
   timing-only mixins are not applied and monitor reports start off.
   `-Dferrite.diagnostics=true` or `/ferrite diagnostics on` (after a
