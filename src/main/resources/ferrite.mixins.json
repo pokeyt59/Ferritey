@@ -72,7 +72,8 @@
 		"AquiferRouteMixin",
 		"BaseHeightCacheMixin",
 		"NoiseChunkMappingMemoMixin",
-		"RecursiveVisitorMemoMixin"
+		"RecursiveVisitorMemoMixin",
+		"StructureFixTimingMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

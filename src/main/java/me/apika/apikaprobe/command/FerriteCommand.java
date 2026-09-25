@@ -118,6 +118,11 @@ public final class FerriteCommand {
 								.then(Commands.literal("on").executes(ctx -> setServerCore(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setServerCore(ctx, false)))
 								.then(Commands.literal("status").executes(ctx -> setServerCore(ctx, null))))
+						.then(Commands.literal("structure-dfu")
+								.then(Commands.literal("status").executes(ctx -> {
+									sendFeedback(ctx, me.apika.apikaprobe.worldgen.StructureFixTiming.status(), false);
+									return Command.SINGLE_SUCCESS;
+								})))
 						.then(Commands.literal("map-memo")
 								.then(Commands.literal("on").executes(ctx -> setMapMemo(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setMapMemo(ctx, false)))

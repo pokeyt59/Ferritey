@@ -98,7 +98,7 @@ sleep 45
 # off, on the server thread, which they stall meanwhile: before the
 # measured window.
 echo "=== height queries ===" | tee -a "$REPORT"
-rcon "ferrite bench columns 100 6" | tee -a "$REPORT"
+rcon "ferrite bench columns 100 6" "ferrite worldgen structure-dfu status" | tee -a "$REPORT"
 
 # Setup (the pen's forceload) stalls the server by design; only later
 # "Can't keep up" warnings are reported.
@@ -147,7 +147,8 @@ for spec in "${phase_list[@]}"; do
 		kill "$pinner"; wait "$pinner" 2>/dev/null || true
 		python3 scripts/pin-threads.py "$GAME_PID" reset "$CPUS"
 	fi
-	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" | sed "s/^/[$label] /" | tee -a "$REPORT"
+	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
+		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
 jcmd "$GAME_PID" JFR.stop name=whole > /dev/null || true
@@ -171,9 +172,11 @@ if [ -f worldgen.jfr ]; then
 	head -c 20000 worldgen-stages.txt | sed -n '1,16p' >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 fi
 if [ -f worldgen-whole.jfr ]; then
-	echo "=== whole run: the server thread's busiest seconds, stalls and GC ==="
+	echo "=== whole run: stages, the server thread's busiest seconds, stalls, GC, inclusive frames ==="
 	java scripts/JfrStages.java worldgen-whole.jfr > worldgen-whole.txt
+	sed -n '1,16p' worldgen-whole.txt
 	sed -n "/busy second/,/collections\$/p" worldgen-whole.txt
+	sed -n "/samples with the frame/,/^\$/p; /under JigsawStructure/,/^\$/p" worldgen-whole.txt
 fi
 [ -z "${explore_failed:-}" ] || { echo "::error::exploring failed"; exit 1; }
 if grep -q 'oracleMismatches=[1-9]' "$REPORT"; then echo "::error::oracle mismatches"; exit 1; fi
