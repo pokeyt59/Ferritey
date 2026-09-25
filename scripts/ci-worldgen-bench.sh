@@ -118,12 +118,18 @@ ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
 MEMO="ferrite worldgen map-memo"
 # Rotated A/B of moving the chunks the server thread waits for ahead
-# (BlockingLoadBoost), everything else at its default. The last phase has
-# it on: every run explores the same seed and corridor, and earlier runs
-# froze 0.2-0.9 s there while Roguelike Dungeons waited for chunks.
+# (BlockingLoadBoost), everything else at its default. Every run explores
+# the same seed and corridor, and earlier runs froze 0.2-0.9 s in the last
+# phase while Roguelike Dungeons waited for chunks: WG_LAST sets the boost
+# there (on or off), to compare the same waits across runs.
 LI="ferrite worldgen lazy-interp"
 SB="ferrite worldgen sync-load-boost"
-PHASES=${WG_PHASES:-"warmup=|sb-off-1=$SB off|sb-on-1=$SB on|sb-on-2=|sb-off-2=$SB off|sb-off-3=|sb-on-3=$SB on"}
+LAST=${WG_LAST:-off}
+if [ "$LAST" = on ]; then
+	PHASES=${WG_PHASES:-"warmup=|sb-off-1=$SB off|sb-on-1=$SB on|sb-on-2=|sb-off-2=$SB off|sb-off-3=|sb-on-3=$SB on"}
+else
+	PHASES=${WG_PHASES:-"warmup=|sb-on-1=$SB on|sb-off-1=$SB off|sb-off-2=|sb-on-2=$SB on|sb-on-3=|sb-off-3=$SB off"}
+fi
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
