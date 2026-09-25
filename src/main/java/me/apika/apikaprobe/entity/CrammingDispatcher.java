@@ -24,7 +24,8 @@ import net.minecraft.server.level.ServerLevel;
  *      so frozen mobs past simulation distance, mobs an activation-range
  *      mod skips, and /tick freeze stay out of the caller set.
  *   3. Fill CrammingHandoff.REQUEST_BUF with positions, AABBs, flags,
- *      and root vehicle ids.
+ *      and root vehicle ids. isPushable() is only asked of mobs that
+ *      overlap another (see runBatch).
  *   4. Native call → Rust runs the spatial hash push accumulator. Each
  *      pair is pushed once per caller member, as vanilla pushes it from
  *      each ticking member's own call. Rust also counts pushable
@@ -80,6 +81,8 @@ public final class CrammingDispatcher {
 	private static long diagVanilla  = 0;
 	private static long diagPushed   = 0;
 	private static long diagDamaged  = 0;
+	private static long diagPushableChecks = 0;
+	private static long diagReruns   = 0;
 	private static long diagLastLogNs = System.nanoTime();
 
 	private CrammingDispatcher() {}
@@ -167,14 +170,27 @@ public final class CrammingDispatcher {
 			if (caller) callers++;
 		}
 
-		// 3–4. Build, dispatch, read.
+		// 3–4. Build, dispatch, read. Every mob goes in as pushable; the
+		//     flag only matters for a mob that overlaps another, so only
+		//     those pay for isPushable() (a block lookup through
+		//     onClimbable). If one of them is not pushable (climbing, or a
+		//     type that never is), the batch runs again with its flag
+		//     cleared, so the result always matches the per-mob flags.
 		CrammingHandoff.buildRequests(MOB_SCRATCH, CALLER);
-		RustBridge.computeCramming(
-			CrammingHandoff.REQUEST_BUF,
-			CrammingHandoff.RESULT_BUF,
-			count
-		);
-		CrammingHandoff.readResults(count, ACCUM_DX, ACCUM_DZ, NEIGHBOR_COUNT, CROWDED_COUNT);
+		compute(count);
+		boolean rerun = false;
+		for (int i = 0; i < count; i++) {
+			if (NEIGHBOR_COUNT[i] == 0) continue;
+			diagPushableChecks++;
+			if (!MOB_SCRATCH.get(i).isPushable()) {
+				CrammingHandoff.clearPushable(i);
+				rerun = true;
+			}
+		}
+		if (rerun) {
+			diagReruns++;
+			compute(count);
+		}
 
 		// 5. Apply pushes; callers keep their crowded count for the damage
 		//    check in their own pushEntities call.
@@ -204,6 +220,15 @@ public final class CrammingDispatcher {
 		diagPushed += pushedThisBatch;
 	}
 
+	private static void compute(int count) {
+		RustBridge.computeCramming(
+			CrammingHandoff.REQUEST_BUF,
+			CrammingHandoff.RESULT_BUF,
+			count
+		);
+		CrammingHandoff.readResults(count, ACCUM_DX, ACCUM_DZ, NEIGHBOR_COUNT, CROWDED_COUNT);
+	}
+
 	private static void maybeLogOverflow(int count) {
 		long now = System.nanoTime();
 		if (now - lastOverflowLogNs < OVERFLOW_LOG_MIN_GAP_NS) return;
@@ -217,8 +242,10 @@ public final class CrammingDispatcher {
 		if (now - diagLastLogNs < 5_000_000_000L) return;
 		diagLastLogNs = now;
 		MonitorLog.info(
-			"[cramming-dispatch] batches={} mobsTotal={}  callers={}  pushed={}  damaged={}  vanilla={}",
-			diagBatches, diagMobs, diagCallers, diagPushed, diagDamaged, diagVanilla
+			"[cramming-dispatch] batches={} mobsTotal={}  callers={}  pushed={}  damaged={}  vanilla={}"
+					+ "  pushableChecks={}  reruns={}",
+			diagBatches, diagMobs, diagCallers, diagPushed, diagDamaged, diagVanilla,
+			diagPushableChecks, diagReruns
 		);
 		diagBatches = 0;
 		diagMobs = 0;
@@ -226,5 +253,7 @@ public final class CrammingDispatcher {
 		diagVanilla = 0;
 		diagPushed = 0;
 		diagDamaged = 0;
+		diagPushableChecks = 0;
+		diagReruns = 0;
 	}
 }

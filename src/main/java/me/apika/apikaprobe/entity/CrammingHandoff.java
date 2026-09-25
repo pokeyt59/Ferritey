@@ -57,6 +57,11 @@ public final class CrammingHandoff {
 	 * Fills REQUEST_BUF with one 40B entry per mob. Mobs with noPhysics or
 	 * passenger state are included (Rust skips them on the flags check).
 	 * {@code callers[i]} marks mobs whose own pushEntities runs this tick.
+	 *
+	 * Every mob is marked pushable here. isPushable() costs a block lookup
+	 * (onClimbable), and Rust only reads the flag for a pair that overlaps,
+	 * so the dispatcher checks it afterwards for the mobs Rust found an
+	 * overlap for, and clears the flag with {@link #clearPushable}.
 	 */
 	public static void buildRequests(List<? extends LivingEntity> mobs, boolean[] callers) {
 		int n = mobs.size();
@@ -70,7 +75,7 @@ public final class CrammingHandoff {
 			AABB aabb = e.getBoundingBox();
 
 			byte flags = 0;
-			if (e.isPushable())    flags |= FLAG_PUSHABLE;
+			flags |= FLAG_PUSHABLE;
 			if (e.isVehicle()) flags |= FLAG_VEHICLE;
 			if (e.isPassenger())    flags |= FLAG_PASSENGER;
 			if (e.noPhysics)          flags |= FLAG_NO_PHYSICS;
@@ -105,6 +110,12 @@ public final class CrammingHandoff {
 			REQUEST_BUF.putInt(rootVehicleId);      // +36
 		}
 		REQUEST_BUF.flip();
+	}
+
+	/** Clears the pushable flag of entry {@code i} in the filled REQUEST_BUF. */
+	public static void clearPushable(int i) {
+		int at = i * REQUEST_STRIDE + 4;
+		REQUEST_BUF.put(at, (byte) (REQUEST_BUF.get(at) & ~FLAG_PUSHABLE));
 	}
 
 	/**
