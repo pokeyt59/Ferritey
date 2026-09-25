@@ -33,10 +33,10 @@ marks pre-release research builds.
   answers air at once; every other block, the hit and the miss result are
   computed as vanilla does. Only `LivingEntity.hasLineOfSight` takes this
   path; other rays keep vanilla's (or Lithium's) clip. CI bench (1000
-  husks, 60 villagers behind glass, Lithium; five rotated rounds): 0.56
-  ms/tick faster with the skip, ahead in every round by 0.35 to 0.70 ms.
-  The oracle compared 250,371 rays with Lithium's clip and found no
-  difference. `/ferrite raycast air-skip on|off|status`,
+  husks, 60 villagers behind glass, Lithium; rotated rounds): 0.56 and
+  0.34 ms/tick faster with the skip over two runs, ahead in 8 of 9 rounds;
+  line-of-sight checks took about 30% fewer profile samples. The oracle
+  compared 250,371 rays with Lithium's clip and found no difference. `/ferrite raycast air-skip on|off|status`,
   `-Dferrite.clip.airskip=false`.
 - **Path type lookups skip Fabric API's empty hook.** Fabric API's
   content-registries hook sits in `PathfindingContext.getPathTypeFromState`,
@@ -48,8 +48,10 @@ marks pre-release research builds.
   the hook. In a same-run profile A/B (equal JFR windows), pathfinding
   took 60-64 samples per window with the shortcut and 95 without, and
   Fabric's hook (64 samples) no longer appears; across runs it fell from
-  5.6-5.8% of the server thread to 3.1-3.3%. MSPT: 0.11 ms/tick faster,
-  ahead in 4 of 5 rotated rounds. `/ferrite ai pathtype-bypass on|off|status`,
+  5.6-5.8% of the server thread to 3.1-3.3% (a later same-run window:
+  55-63 samples with it, 102 without). MSPT is within the bench's noise:
+  +0.11 and -0.35 ms/tick over two rotated runs.
+  `/ferrite ai pathtype-bypass on|off|status`,
   `-Dferrite.ai.pathtypebypass=false`.
 - **Lean mode with spark.** When spark is installed, about thirty
   timing-only mixins are left out at launch and monitor reports start
@@ -102,9 +104,9 @@ marks pre-release research builds.
 
 ### Measured
 - On the CI bench, Ferrite's cramming batch against vanilla's
-  `pushEntities`: 10.07 ms/tick against 13.70 ms over five rotated
-  rounds (ahead in every round by 3.5 to 3.7 ms); earlier runs on other
-  runners gave 1.4 to 3.2 ms.
+  `pushEntities`: 3.62 and 2.99 ms/tick faster over two rotated runs
+  (10.07 against 13.70, and 8.69 against 11.68), ahead in all 9 rounds;
+  earlier runs on other runners gave 1.4 to 3.2 ms.
 - Tried and dropped: a flat copy of each brain's behavior table (for
   villagers and other brain mobs). It was exact, but measured 0.46
   ms/tick slower in all five rotated rounds and slower in a same-run
