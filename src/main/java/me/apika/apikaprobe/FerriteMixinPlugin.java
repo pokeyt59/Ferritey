@@ -52,6 +52,13 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 	private static final Set<String> PHYSICS_MIXINS = Set.of(
 			P + "MovementRedirectMixin", P + "PhysicsPreTickMixin", P + "EntityAdjustInvoker");
 
+	// Walkability cache hooks: getPathTypeFromState runs for every node a
+	// pathfinder expands, setBlock for every block change. The cache flag is
+	// read once at boot (NavigationCacheBridge.WALK_CACHE_ENABLED), so with
+	// it off the hooks can only return; leave them out.
+	private static final Set<String> NAV_CACHE_MIXINS = Set.of(
+			P + "WalkNodeEvaluatorMixin", P + "LevelSetBlockMixin");
+
 	/** System property the mod reads to learn which mode the plugin chose. */
 	public static final String DIAGNOSTICS_PROPERTY = "ferrite.diagnostics.effective";
 
@@ -60,6 +67,7 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 	private boolean diagnostics;
 	private boolean navParity;
 	private boolean physicsHooks;
+	private boolean navCache;
 
 	@Override
 	public void onLoad(String mixinPackage) {
@@ -67,6 +75,8 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 		this.moonrise = loader.isModLoaded("moonrise");
 		this.navParity = Boolean.parseBoolean(System.getProperty("ferrite.nav.parity", "false"));
 		this.physicsHooks = Boolean.getBoolean("ferrite.physics.hooks");
+		// Same parse as NavigationCacheBridge.WALK_CACHE_ENABLED.
+		this.navCache = Boolean.parseBoolean(System.getProperty("ferrite.nav.cache", "false"));
 
 		String reason;
 		String prop = System.getProperty("ferrite.diagnostics");
@@ -105,6 +115,9 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
 		if (!physicsHooks && PHYSICS_MIXINS.contains(mixinClassName)) {
+			return false;
+		}
+		if (!navCache && NAV_CACHE_MIXINS.contains(mixinClassName)) {
 			return false;
 		}
 		if (!diagnostics && (TIMING_MIXINS.contains(mixinClassName)
