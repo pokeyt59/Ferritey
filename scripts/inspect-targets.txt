@@ -4,5 +4,11 @@
 # "@sig <jar-name-regex> <entry-regex> <member-regex>" prints matching member signatures.
 # Mod jars come from scripts/worldgen-mods.txt, fetched by the inspect job.
 # The job log keeps only its last 5000 lines: keep the list short.
-@list ([Ff]ast.?[Nn]oise|fastnoise) .*/(FastNoiseMixinPlugin|[A-Za-z]*Config[A-Za-z]*)\.class
-@list ([Ff]ast.?[Nn]oise|fastnoise) .*\.(json|toml|properties)$
+@sig minecraft-extracted_server net/minecraft/world/level/chunk/ChunkAccess\.class fillBiomesFromNoise|getOrCreateNoiseChunk|getOrCreateHeightmapUnprimed|getSection\(|getSections|getHeight\(
+@sig minecraft-extracted_server net/minecraft/world/level/chunk/LevelChunkSection\.class copy|setBlockState|getBlockState|getBiomes|LevelChunkSection\(
+@sig minecraft-extracted_server net/minecraft/world/level/levelgen/Heightmap\.class primeHeightmaps|update
+@sig minecraft-extracted_server net/minecraft/world/level/levelgen/WorldGenerationContext\.class WorldGenerationContext\(
+@sig minecraft-extracted_server net/minecraft/world/level/biome/BiomeManager\.class BiomeManager\(|obfuscateSeed
+@sig minecraft-extracted_server net/minecraft/world/level/chunk/PalettedContainerRO\.class getAll|copy
+@sig minecraft-extracted_server net/minecraft/world/level/levelgen/SurfaceRules\$(SurfaceRule|Condition|RuleSource|ConditionSource|TestRule|SequenceRule|SequenceRuleSource)\.class class|interface|record|tryApply|test\(
+net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator buildSurface|lambda\$buildSurface\$0
