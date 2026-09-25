@@ -120,11 +120,14 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
 MEMO="ferrite worldgen map-memo"
-# Rotated A/B of the noise sampling shortcuts and lazy interpolation
-# together against neither; a setup may hold several commands split by ';'.
-NM="ferrite worldgen noise-math"
-LI="ferrite worldgen lazy-interp"
-PHASES=${WG_PHASES:-"warmup=|new-on-1=$NM on;$LI on|new-off-1=$NM off;$LI off|new-off-2=|new-on-2=$NM on;$LI on|new-on-3=|new-off-3=$NM off;$LI off"}
+# Rotated A/B of asking for the neighbours of a chunk the server thread
+# waits for (SyncLoadPrefetch). Every run explores the same seed and
+# corridor, and in the last phase Roguelike Dungeons makes the server
+# thread wait for chunks 10-12 times in a row (1.6-1.9 s of slow ticks
+# without this): that phase has it on. A setup may hold several commands
+# split by ';'.
+SP="ferrite worldgen sync-prefetch"
+PHASES=${WG_PHASES:-"warmup=|sp-off-1=$SP off|sp-on-1=$SP on|sp-on-2=|sp-off-2=$SP off|sp-off-3=|sp-on-3=$SP on"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -149,6 +152,7 @@ for spec in "${phase_list[@]}"; do
 		IFS=';' read -r -a setup_cmds <<< "$setup"
 		rcon "${setup_cmds[@]}" > /dev/null
 	fi
+	rcon "ferrite worldgen sync-prefetch reset" > /dev/null
 	echo "[$label] starts at $(date -u +%H:%M:%S) UTC" | tee -a "$REPORT"
 	[ -n "$recorded" ] || jcmd "$GAME_PID" JFR.start name=worldgen settings="$PWD/worldgen.jfc" filename="$PWD/worldgen.jfr" > /dev/null
 	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
@@ -160,7 +164,7 @@ for spec in "${phase_list[@]}"; do
 	fi
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
 		"ferrite worldgen lazy-interp status" \
-		"ferrite worldgen noise-math status" \
+		"ferrite worldgen noise-math status" "ferrite worldgen sync-prefetch status" \
 		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
