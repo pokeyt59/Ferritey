@@ -41,6 +41,29 @@ marks pre-release research builds.
   on|off|status` (saved), `-Dferrite.affinity.servercore=true`.
 
 ### Changed
+- **Noise router mapped once per node.** Every `NoiseChunk` (one per
+  chunk, one per terrain height query) maps the whole noise router
+  through its wrap visitor. The router is a graph: datapack functions
+  such as Terralith's are referenced from many places, and
+  `DensityFunction.mapAll` walks it as a tree. It rebuilt a shared
+  subtree at every reference and passed it to `wrap`, whose map lookup
+  re-hashed the whole subtree: about 52,000 wrap calls per `NoiseChunk`
+  with the bench's mods. A repeat always comes back as the first visit's
+  result, because its children map to the same objects. So each node's
+  mapping is now remembered by identity for the `NoiseChunk`'s own wrap
+  visitors, and the `NoiseChunk` gets the same cache objects in the same
+  order. CI worldgen bench:
+  - a terrain height query took 3.48 ms against 7.43 with identical
+    heights;
+  - `NoiseChunk` construction fell from 14.7% to 5.6% of worldgen
+    worker samples;
+  - worker CPU per explored chunk was 92/82/97 ms against 101/90/115
+    without, winning all three rotated pairs (about 11% less).
+
+  One `NoiseChunk` in 64 maps every repeat anyway and checks that the
+  same object comes back: 5,775,553 checks, no mismatch.
+  `/ferrite worldgen map-memo on|off|status`,
+  `-Dferrite.worldgen.mapmemo=false`.
 - **Terrain height queries are remembered.** Structure placement asks
   the generator for terrain heights at every structure start and for
   terrain-following jigsaw pieces. Each query builds a whole `NoiseChunk`

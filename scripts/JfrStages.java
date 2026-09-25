@@ -88,9 +88,16 @@ public class JfrStages {
 						|| type.equals("jdk.JavaMonitorWait") || type.equals("jdk.ThreadSleep")) {
 					RecordedThread t = event.getThread();
 					long ms = event.getDuration().toMillis();
-					if (t != null && "Server thread".equals(t.getJavaName()) && ms >= 50) {
+					RecordedStackTrace st = event.getStackTrace();
+					boolean idle = false;
+					if (st != null) {
+						for (RecordedFrame f : st.getFrames()) {
+							if (name(f).endsWith("MinecraftServer.waitUntilNextTick")) idle = true;
+						}
+					}
+					// Waiting for the next tick is idle time, not a stall.
+					if (t != null && "Server thread".equals(t.getJavaName()) && ms >= 50 && !idle) {
 						StringBuilder sb = new StringBuilder(String.format("%6d ms  %s", ms, type));
-						RecordedStackTrace st = event.getStackTrace();
 						if (st != null) {
 							List<RecordedFrame> fr = st.getFrames();
 							for (int i = 0; i < Math.min(14, fr.size()); i++) sb.append("\n            at ").append(name(fr.get(i)));
@@ -165,26 +172,43 @@ public class JfrStages {
 			System.out.printf("%8d  %s%n", e.getValue(), e.getKey());
 		}
 
-		// The busiest second of the server thread: a long tick shows as a
-		// dense run of samples; what ran in it is the likely cause.
+		// The server thread's busiest seconds: a long tick shows as a dense
+		// run of samples, and what ran in it is the likely cause. Up to
+		// three windows that don't overlap, with their wall-clock start.
 		serverTimes.sort((a, b) -> Long.compare(a[0], b[0]));
-		int best = 0, bestStart = 0;
+		List<long[]> windows = new ArrayList<>();   // {samples, first index}
 		for (int i = 0, j = 0; i < serverTimes.size(); i++) {
 			while (serverTimes.get(i)[0] - serverTimes.get(j)[0] > 1_000_000_000L) j++;
-			if (i - j + 1 > best) { best = i - j + 1; bestStart = j; }
+			windows.add(new long[] {i - j + 1, j});
 		}
-		System.out.printf("%n=== server thread's busiest 1 s window: %d samples ===%n", best);
-		Map<String, Integer> inWindow = new TreeMap<>();
-		for (int k = bestStart; k < bestStart + best; k++) {
-			inWindow.merge(serverWhat.get((int) serverTimes.get(k)[1]), 1, Integer::sum);
+		windows.sort((a, b) -> Long.compare(b[0], a[0]));
+		List<long[]> picked = new ArrayList<>();
+		for (long[] w : windows) {
+			long start = serverTimes.get((int) w[1])[0];
+			boolean overlaps = false;
+			for (long[] p : picked) {
+				if (Math.abs(serverTimes.get((int) p[1])[0] - start) < 1_000_000_000L) overlaps = true;
+			}
+			if (!overlaps) picked.add(w);
+			if (picked.size() == 3) break;
 		}
-		List<Map.Entry<String, Integer>> iw = new ArrayList<>(inWindow.entrySet());
-		iw.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
-		for (Map.Entry<String, Integer> e : iw.subList(0, Math.min(12, iw.size()))) {
-			System.out.printf("%6d  %s%n", e.getValue(), e.getKey());
+		for (long[] w : picked) {
+			long start = serverTimes.get((int) w[1])[0];
+			System.out.printf("%n=== server thread's busy second at %s UTC: %d samples ===%n",
+					java.time.LocalTime.ofNanoOfDay(Math.floorMod(start, 86_400_000_000_000L))
+							.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")), w[0]);
+			Map<String, Integer> inWindow = new TreeMap<>();
+			for (int k = (int) w[1]; k < w[1] + w[0]; k++) {
+				inWindow.merge(serverWhat.get((int) serverTimes.get(k)[1]), 1, Integer::sum);
+			}
+			List<Map.Entry<String, Integer>> iw = new ArrayList<>(inWindow.entrySet());
+			iw.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+			for (Map.Entry<String, Integer> e : iw.subList(0, Math.min(8, iw.size()))) {
+				System.out.printf("%6d  %s%n", e.getValue(), e.getKey());
+			}
 		}
 
-		System.out.println("\n=== server thread blocked >= 50 ms (park, monitor, sleep) ===");
+		System.out.println("\n=== server thread blocked >= 50 ms outside the wait for the next tick ===");
 		for (String st : stalls.subList(0, Math.min(12, stalls.size()))) System.out.println(st);
 		System.out.println(stalls.size() + " such events");
 

@@ -114,7 +114,9 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
 MEMO="ferrite worldgen map-memo"
-PHASES=${WG_PHASES:-"warmup=$MEMO on|memo-on=$MEMO on|memo-off=$MEMO off|memo-off=$MEMO off|memo-on=$MEMO on|memo-on=$MEMO on|memo-off=$MEMO off"}
+# Shipped defaults throughout: this run looks for the tick spikes seen late
+# in earlier runs (the whole run is recorded, below).
+PHASES=${WG_PHASES:-"warmup=|run-1=|run-2=|run-3=|run-4=|run-5=|run-6="}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -122,6 +124,8 @@ sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(perio
 	"$JAVA_HOME/lib/jfr/profile.jfc" > worldgen.jfc
 x=$START_X
 recorded=
+# Every phase, with JFR's default settings, to find stalls and their time.
+jcmd "$GAME_PID" JFR.start name=whole settings=default filename="$PWD/worldgen-whole.jfr" > /dev/null
 IFS='|' read -r -a phase_list <<< "$PHASES"
 for spec in "${phase_list[@]}"; do
 	label=${spec%%=*}
@@ -134,6 +138,7 @@ for spec in "${phase_list[@]}"; do
 	elif [ -n "$setup" ]; then
 		rcon "$setup" > /dev/null
 	fi
+	echo "[$label] starts at $(date -u +%H:%M:%S) UTC" | tee -a "$REPORT"
 	[ -n "$recorded" ] || jcmd "$GAME_PID" JFR.start name=worldgen settings="$PWD/worldgen.jfc" filename="$PWD/worldgen.jfr" > /dev/null
 	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" explore \
 		"$x" "$WIDTH" "$STEP" "$DURATION" "$label" | tee -a "$REPORT" || explore_failed=1
@@ -145,6 +150,7 @@ for spec in "${phase_list[@]}"; do
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" | sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
+jcmd "$GAME_PID" JFR.stop name=whole > /dev/null || true
 
 rcon "stop" > /dev/null || true
 wait "$PID" || true
@@ -163,6 +169,11 @@ if [ -f worldgen.jfr ]; then
 	java scripts/JfrStages.java worldgen.jfr | tee worldgen-stages.txt
 	java scripts/JfrHot.java worldgen.jfr 150 > worldgen-hot.txt
 	head -c 20000 worldgen-stages.txt | sed -n '1,16p' >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+fi
+if [ -f worldgen-whole.jfr ]; then
+	echo "=== whole run: the server thread's busiest seconds, stalls and GC ==="
+	java scripts/JfrStages.java worldgen-whole.jfr > worldgen-whole.txt
+	sed -n "/busy second/,/collections\$/p" worldgen-whole.txt
 fi
 [ -z "${explore_failed:-}" ] || { echo "::error::exploring failed"; exit 1; }
 if grep -q 'oracleMismatches=[1-9]' "$REPORT"; then echo "::error::oracle mismatches"; exit 1; fi

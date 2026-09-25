@@ -316,6 +316,7 @@ jobs:
           path: |
             worldgen-report.txt
             worldgen-stages.txt
+            worldgen-whole.txt
             worldgen-hot.txt
             worldgen-mods-fetched.txt
             worldgen-server.log
