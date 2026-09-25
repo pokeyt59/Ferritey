@@ -114,6 +114,10 @@ public final class FerriteCommand {
 						.then(Commands.literal("bench").executes(FerriteCommand::ffmBench)))
 				.then(Commands.literal("worldgen")
 						.then(Commands.literal("status").executes(FerriteCommand::worldgenStatus))
+						.then(Commands.literal("isolate-server-core")
+								.then(Commands.literal("on").executes(ctx -> setServerCore(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setServerCore(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setServerCore(ctx, null))))
 						.then(Commands.literal("height-cache")
 								.then(Commands.literal("on").executes(ctx -> setHeightCache(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setHeightCache(ctx, false)))
@@ -2023,6 +2027,20 @@ public final class FerriteCommand {
 	 * answer air blocks without the per-block shape clip.
 	 * Session only; -Dferrite.clip.airskip=false sets the boot default.
 	 */
+	/** /ferrite worldgen isolate-server-core on|off|status: ServerCoreAffinity, saved. */
+	private static int setServerCore(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			boolean applied = me.apika.apikaprobe.worldgen.chunk.ServerCoreAffinity.setEnabled(on);
+			if (applied) {
+				me.apika.apikaprobe.config.FerriteConfig.set(
+						me.apika.apikaprobe.config.FerriteConfig.KEY_ISOLATE_SERVER_CORE, on, false);
+			}
+		}
+		sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.ServerCoreAffinity.status(), on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
 	/** /ferrite worldgen height-cache on|off|status: BaseHeightCache, for A/B. */
 	private static int setHeightCache(
 			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {

@@ -37,6 +37,7 @@ public final class FerriteConfig {
 	public static final String KEY_LOG_MONITORS = "log-monitors";
 	public static final String KEY_LOG_MUTED = "log-muted";
 	public static final String KEY_PRECHUNK = "prechunk";
+	public static final String KEY_ISOLATE_SERVER_CORE = "isolate-server-core";
 	/** Read by FerriteMixinPlugin at launch; takes effect on restart. */
 	public static final String KEY_DIAGNOSTICS = "diagnostics";
 
@@ -80,6 +81,9 @@ public final class FerriteConfig {
 		if ((v = STATE.getProperty(KEY_PRECHUNK)) != null) {
 			me.apika.apikaprobe.monitor.PreChunkDispatcher.ENABLED = Boolean.parseBoolean(v);
 		}
+		if ((v = STATE.getProperty(KEY_ISOLATE_SERVER_CORE)) != null && Boolean.parseBoolean(v)) {
+			me.apika.apikaprobe.worldgen.chunk.ServerCoreAffinity.setEnabled(true);
+		}
 		if ((v = STATE.getProperty(KEY_LOG_MONITORS)) != null) {
 			MonitorLog.ENABLED = Boolean.parseBoolean(v);
 		}
@@ -91,7 +95,8 @@ public final class FerriteConfig {
 		for (String key : STATE.stringPropertyNames()) {
 			switch (key) {
 				case KEY_CRAMMING, KEY_HOPPER, KEY_REDSTONE_AC,
-						KEY_LOG_MONITORS, KEY_LOG_MUTED, KEY_DIAGNOSTICS, KEY_PRECHUNK -> {}
+						KEY_LOG_MONITORS, KEY_LOG_MUTED, KEY_DIAGNOSTICS, KEY_PRECHUNK,
+						KEY_ISOLATE_SERVER_CORE -> {}
 				default -> ExampleMod.LOGGER.warn(
 						"[config] unknown key \"{}\" in {} (ignored)", key, FILE_NAME);
 			}
