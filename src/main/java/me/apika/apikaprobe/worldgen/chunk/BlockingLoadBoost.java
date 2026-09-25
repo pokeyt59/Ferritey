@@ -58,8 +58,49 @@ public final class BlockingLoadBoost {
 	private static final LongAdder over50ms = new LongAdder();
 	private static final LongAdder moved = new LongAdder();
 
-	/** A chunk future the server thread asked for; tracked until it completes. */
-	public static void track(long pos, CompletableFuture<?> future) {
+	/** The last chunk generation request made on each thread, until that thread blocks or asks again. */
+	private static final ThreadLocal<long[]> LAST_POS = ThreadLocal.withInitial(() -> new long[1]);
+	private static final ThreadLocal<CompletableFuture<?>[]> LAST_FUTURE = ThreadLocal.withInitial(() -> new CompletableFuture<?>[1]);
+	private static volatile Class<?> chunkExecutorClass;
+
+	/**
+	 * A chunk holder was asked to generate up to a status
+	 * (GenerationChunkHolder.scheduleChunkGenerationTask): both the game's
+	 * blocking chunk request and Lithium's replacement of it make this call
+	 * last before they block.
+	 */
+	public static void requested(long pos, CompletableFuture<?> future) {
+		LAST_POS.get()[0] = pos;
+		LAST_FUTURE.get()[0] = future;
+	}
+
+	/**
+	 * A thread is about to block in an executor's managedBlock. If that is
+	 * the server's chunk executor (a blocking chunk request) and the last
+	 * chunk it asked for is not ready, that chunk is waited for.
+	 */
+	public static void beforeBlock(Object executor) {
+		CompletableFuture<?>[] last = LAST_FUTURE.get();
+		CompletableFuture<?> future = last[0];
+		if (future == null) return;
+		last[0] = null;
+		if (!isChunkExecutor(executor)) return;
+		track(LAST_POS.get()[0], future);
+	}
+
+	private static boolean isChunkExecutor(Object executor) {
+		Class<?> c = chunkExecutorClass;
+		if (c == null) {
+			if (!executor.getClass().getName().equals("net.minecraft.server.level.ServerChunkCache$MainThreadExecutor")) {
+				return false;
+			}
+			chunkExecutorClass = c = executor.getClass();
+		}
+		return executor.getClass() == c;
+	}
+
+	/** A chunk future the server thread waits for; tracked until it completes. */
+	private static void track(long pos, CompletableFuture<?> future) {
 		if (future.isDone() || !add(pos)) return;
 		long start = System.nanoTime();
 		future.whenComplete((r, t) -> {

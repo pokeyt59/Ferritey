@@ -78,7 +78,8 @@
 		"LazyInterpolationChunkMixin",
 		"LazyInterpolatorMixin",
 		"ChunkTaskQueueBoostMixin",
-		"SyncChunkLoadTrackMixin",
+		"ChunkRequestTrackMixin",
+		"ManagedBlockTrackMixin",
 		"ImprovedNoiseMathMixin",
 		"PerlinWrapMixin"
 	],
