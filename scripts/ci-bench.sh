@@ -17,7 +17,7 @@ REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
 SAMPLES=${BENCH_SAMPLES:-8}
-BENCH_ARMS=${BENCH_ARMS:-"all-on=ferrite entityquery typed-grid on;ferrite entityquery collider-sections on|typed-linear=ferrite entityquery typed-grid off;ferrite entityquery collider-sections on|collider-level-wide=ferrite entityquery typed-grid on;ferrite entityquery collider-sections off"}
+BENCH_ARMS=${BENCH_ARMS:-"all-on=ferrite raycast air-skip on;ferrite cramming on|clip-vanilla=ferrite raycast air-skip off;ferrite cramming on|cramming-vanilla=ferrite raycast air-skip on;ferrite cramming off"}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
@@ -160,6 +160,8 @@ for round in 1 2; do
 done
 
 rcon "execute if entity @e[type=minecraft:husk]" "execute if entity @e[type=minecraft:villager]"
+airskip=$(rcon "ferrite raycast air-skip status")
+echo "$airskip"
 rcon "stop" > /dev/null || true
 wait "$PID" || true
 
@@ -167,10 +169,12 @@ if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Crit
 	fail "mixin errors in the server log"
 fi
 grep -v 'Rcon:' "$LOG" | grep '\[entity-query-cache\] scanned\|\[collider-skip\] eligible' | tail -8 || true
-if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH' "$LOG"; then
+if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH\|\[clip-airskip\] MISMATCH' "$LOG"; then
 	grep 'MISMATCH' "$LOG" | head -5
-	fail "entity query oracle mismatches"
+	fail "oracle mismatches"
 fi
+# The air-skip mixin is require = 0; make sure it applied and ran.
+echo "$airskip" | grep -q 'rays=[1-9]' || fail "raycast air-skip never ran"
 
 echo "=== /tick query samples ==="
 cat "$REPORT"

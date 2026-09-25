@@ -275,6 +275,11 @@ public final class FerriteCommand {
 								.then(Commands.literal("on").executes(ctx -> setColliderSections(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setColliderSections(ctx, false)))
 								.then(Commands.literal("status").executes(ctx -> setColliderSections(ctx, null)))))
+				.then(Commands.literal("raycast")
+						.then(Commands.literal("air-skip")
+								.then(Commands.literal("on").executes(ctx -> setClipAirSkip(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setClipAirSkip(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setClipAirSkip(ctx, null)))))
 				.then(Commands.literal("prechunk")
 						.then(Commands.literal("on").executes(ctx -> setPrechunk(ctx, true)))
 						.then(Commands.literal("off").executes(ctx -> setPrechunk(ctx, false)))
@@ -1931,6 +1936,28 @@ public final class FerriteCommand {
 		String msg = String.format("[collider-skip] per-section=%s (skip %s)",
 				me.apika.apikaprobe.spatial.ColliderSkip.PER_SECTION ? "on" : "off",
 				me.apika.apikaprobe.spatial.ColliderSkip.ENABLED ? "on" : "off");
+		sendFeedback(ctx, msg, on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/**
+	 * /ferrite raycast air-skip on|off|status: whether clip answers air
+	 * blocks itself instead of running vanilla's per-block shape clip.
+	 * Session only; -Dferrite.clip.airskip=false sets the boot default.
+	 */
+	private static int setClipAirSkip(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.spatial.ClipAirSkip.ENABLED = on;
+		}
+		String msg = String.format(
+				"[clip-airskip] air-skip=%s rays=%d skipped=%d passed=%d oracleChecks=%d oracleHits=%d",
+				me.apika.apikaprobe.spatial.ClipAirSkip.ENABLED ? "on" : "off",
+				me.apika.apikaprobe.spatial.ClipAirSkip.rays,
+				me.apika.apikaprobe.spatial.ClipAirSkip.skipped,
+				me.apika.apikaprobe.spatial.ClipAirSkip.passed,
+				me.apika.apikaprobe.spatial.ClipAirSkip.oracleChecks,
+				me.apika.apikaprobe.spatial.ClipAirSkip.oracleHits);
 		sendFeedback(ctx, msg, on != null);
 		return Command.SINGLE_SUCCESS;
 	}

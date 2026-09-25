@@ -4,9 +4,11 @@
 # version without a local copy of the game.
 set -euo pipefail
 
+# Loom sets up the Minecraft jars before compiling, so a compile error in
+# the mod still leaves the jars to inspect; print it and carry on.
 ./gradlew compileJava -x buildRustLib -x copyRustDll > inspect-gradle.log 2>&1 || {
-	tail -50 inspect-gradle.log
-	exit 1
+	echo "compileJava failed:"
+	grep -E 'error:|warning:' -A3 inspect-gradle.log | head -60 || tail -50 inspect-gradle.log
 }
 mapfile -t jars < <(find "$HOME/.gradle/caches" .gradle -name '*.jar' 2>/dev/null | grep -i 'minecraft' | grep -v -- '-sources' || true)
 echo "candidate jars: ${#jars[@]}"
