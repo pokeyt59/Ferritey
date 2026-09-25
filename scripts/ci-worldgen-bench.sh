@@ -116,9 +116,11 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
 MEMO="ferrite worldgen map-memo"
-# Rotated A/B of Biolith's search on flat arrays (BiomeSearch).
+# Rotated A/B of lazy interpolation (LazyInterpolation), everything else
+# at its default.
 BS="ferrite worldgen biome-search"
-PHASES=${WG_PHASES:-"warmup=|bs-on-1=$BS on|bs-off-1=$BS off|bs-off-2=|bs-on-2=$BS on|bs-on-3=|bs-off-3=$BS off"}
+LI="ferrite worldgen lazy-interp"
+PHASES=${WG_PHASES:-"warmup=|li-on-1=$LI on|li-off-1=$LI off|li-off-2=|li-on-2=$LI on|li-on-3=|li-off-3=$LI off"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -152,7 +154,7 @@ for spec in "${phase_list[@]}"; do
 		python3 scripts/pin-threads.py "$GAME_PID" reset "$CPUS"
 	fi
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
-		"ferrite worldgen biome-search status" \
+		"ferrite worldgen biome-search status" "ferrite worldgen lazy-interp status" \
 		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done

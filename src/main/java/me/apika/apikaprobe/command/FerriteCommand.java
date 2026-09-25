@@ -130,6 +130,10 @@ public final class FerriteCommand {
 								.then(Commands.literal("on").executes(ctx -> setMapMemo(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setMapMemo(ctx, false)))
 								.then(Commands.literal("status").executes(ctx -> setMapMemo(ctx, null))))
+						.then(Commands.literal("lazy-interp")
+								.then(Commands.literal("on").executes(ctx -> setLazyInterp(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setLazyInterp(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setLazyInterp(ctx, null))))
 						.then(Commands.literal("biome-search")
 								.then(Commands.literal("on").executes(ctx -> setBiomeSearch(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setBiomeSearch(ctx, false)))
@@ -2116,6 +2120,16 @@ public final class FerriteCommand {
 			me.apika.apikaprobe.worldgen.MappingMemo.ENABLED = on;
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.MappingMemo.status(), on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/** /ferrite worldgen lazy-interp on|off|status: LazyInterpolation (new NoiseChunks), for A/B. */
+	private static int setLazyInterp(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.worldgen.LazyInterpolation.ENABLED = on;
+		}
+		sendFeedback(ctx, me.apika.apikaprobe.worldgen.LazyInterpolation.status(), on != null);
 		return Command.SINGLE_SUCCESS;
 	}
 

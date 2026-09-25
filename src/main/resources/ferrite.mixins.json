@@ -74,7 +74,9 @@
 		"NoiseChunkMappingMemoMixin",
 		"RecursiveVisitorMemoMixin",
 		"StructureFixTimingMixin",
-		"BiolithSearchMixin"
+		"BiolithSearchMixin",
+		"LazyInterpolationChunkMixin",
+		"LazyInterpolatorMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
