@@ -19,6 +19,8 @@ mkdir -p run
 echo "eula=true" > run/eula.txt
 cat > run/server.properties <<PROPS
 online-mode=false
+# No players join, and the server pauses ticking after 60 s without any.
+pause-when-empty-seconds=-1
 view-distance=4
 simulation-distance=4
 level-seed=ferrite-smoke

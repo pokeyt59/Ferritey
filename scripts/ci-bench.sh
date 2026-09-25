@@ -23,6 +23,8 @@ mkdir -p run
 echo "eula=true" > run/eula.txt
 cat > run/server.properties <<PROPS
 online-mode=false
+# No players join, and the server pauses ticking after 60 s without any.
+pause-when-empty-seconds=-1
 view-distance=4
 simulation-distance=4
 level-seed=ferrite-bench
@@ -99,6 +101,13 @@ rcon "summon minecraft:oak_boat -15.5 152 -15.5" \
 
 echo "warming up (JIT, pathing)"
 sleep 60
+
+# The numbers mean nothing unless the world is really ticking.
+t0=$(rcon "time query gametime" | sed -n 's/[^0-9]*\([0-9][0-9]*\).*/\1/p')
+sleep 5
+t1=$(rcon "time query gametime" | sed -n 's/[^0-9]*\([0-9][0-9]*\).*/\1/p')
+echo "game time advanced $((t1 - t0)) ticks in 5 s"
+[ "$((t1 - t0))" -ge 50 ] || fail "the world is not ticking (game time $t0 -> $t1)"
 
 # --- Arms ----------------------------------------------------------------
 jcmd -l
