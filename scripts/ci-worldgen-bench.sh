@@ -102,6 +102,9 @@ rcon "ferrite bench columns 100 6" "ferrite worldgen structure-dfu status" | tee
 # Height queries with noise sampling shortcuts and lazy interpolation on and off.
 rcon "ferrite bench columns 100 6 noise-math" "ferrite bench columns 100 6 lazy-interp" \
 	"ferrite worldgen noise-math status" "ferrite worldgen lazy-interp status" | tee -a "$REPORT"
+# The noise stage of whole chunks with each noise switch on and off.
+rcon "ferrite bench noise 24 6 lazy-interp" "ferrite bench noise 24 6 noise-math" \
+	"ferrite bench noise 24 6 map-memo" | tee -a "$REPORT"
 
 # Setup (the pen's forceload) stalls the server by design; only later
 # "Can't keep up" warnings are reported.
@@ -232,3 +235,4 @@ fi
 if grep -q 'oracleMismatches=[1-9]' "$REPORT"; then echo "::error::oracle mismatches"; exit 1; fi
 grep -q 'heights differing 0;' "$REPORT" || { echo "::error::no column bench result"; exit 1; }
 if grep -E -q 'heights differing [1-9]' "$REPORT"; then echo "::error::height queries differ with a worldgen switch"; exit 1; fi
+if grep -E -q 'chunks differing [1-9]' "$REPORT"; then echo "::error::noise fill differs with a worldgen switch"; exit 1; fi

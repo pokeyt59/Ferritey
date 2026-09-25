@@ -282,6 +282,18 @@ public final class FerriteCommand {
 																	StringArgumentType.getString(ctx, "switch")), false);
 															return Command.SINGLE_SUCCESS;
 														})))))
+						.then(Commands.literal("noise")
+								.then(Commands.argument("chunks", IntegerArgumentType.integer(1, 10000))
+										.then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
+												.then(Commands.argument("switch", StringArgumentType.word())
+														.executes(ctx -> {
+															sendFeedback(ctx, me.apika.apikaprobe.worldgen.NoiseBench.run(
+																	ctx.getSource().getLevel(),
+																	IntegerArgumentType.getInteger(ctx, "chunks"),
+																	IntegerArgumentType.getInteger(ctx, "rounds"),
+																	StringArgumentType.getString(ctx, "switch")), false);
+															return Command.SINGLE_SUCCESS;
+														})))))
 						.then(Commands.literal("explore")
 								.then(Commands.literal("add")
 										.then(Commands.argument("x1", IntegerArgumentType.integer())

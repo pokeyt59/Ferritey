@@ -80,7 +80,9 @@
 		"ChunkRequestTrackMixin",
 		"ManagedBlockTrackMixin",
 		"ImprovedNoiseMathMixin",
-		"PerlinWrapMixin"
+		"PerlinWrapMixin",
+		"NoiseChunkStateInvoker",
+		"NoiseGeneratorFluidAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1
