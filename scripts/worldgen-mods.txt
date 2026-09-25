@@ -5,6 +5,9 @@
 # before the mod that needs it to pin its version too. Mods without a
 # build are reported and skipped. Moog's End and Nether structures are
 # left out: this bench explores the Overworld.
+# Referenced by one of the mods below without being declared (the first
+# pinned run failed with NoClassDefFoundError com.supermartijn642...).
+supermartijn642s-core-lib=SuperMartijn642's Core Lib
 lithium@0.25.2=Lithium
 scalablelux@0.3.0-alpha.0.3=ScalableLux
 fast-noise@1.1.0-beta.4=Fast Noise
