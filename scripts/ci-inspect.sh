@@ -14,6 +14,11 @@ mapfile -t jars < <(find "$HOME/.gradle/caches" .gradle -name '*.jar' 2>/dev/nul
 # Every other jar (Fabric API modules and the like), searched after the game.
 mapfile -t more < <(find "$HOME/.gradle/caches" .gradle -name '*.jar' 2>/dev/null | grep -vi 'minecraft' | grep -v -- '-sources' || true)
 jars+=("${more[@]}")
+# Mods the inspect job fetched from Modrinth (scripts/worldgen-mods.txt).
+if [ -d run/mods ]; then
+	mapfile -t mods < <(find run/mods -name '*.jar' 2>/dev/null)
+	jars+=("${mods[@]}")
+fi
 echo "candidate jars: ${#jars[@]}"
 
 # "@list <jar-name-regex> <entry-regex>" lines print javap -c -p of every

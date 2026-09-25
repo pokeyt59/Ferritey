@@ -221,7 +221,14 @@ jobs:
         with:
           java-version: 25
           distribution: 'temurin'
-      - name: javap vanilla targets
+      - name: fetch the worldgen mods from Modrinth
+        shell: bash
+        run: |
+          mc=$(sed -n 's/^minecraft_version=//p' gradle.properties)
+          mapfile -t mods < <(grep -v '^#' scripts/worldgen-mods.txt | grep -v '^$')
+          python3 scripts/modrinth-fetch.py "$mc" run/mods "${mods[@]}" || true
+          ls -1 run/mods || true
+      - name: javap vanilla and mod targets
         shell: bash
         run: scripts/ci-inspect.sh
 

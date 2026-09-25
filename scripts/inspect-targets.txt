@@ -1,22 +1,38 @@
 # One target per line: <fully.qualified.Class> <method-name-regex>
 # The CI inspect job prints javap -c -p for each matching method.
 # "@list <jar-name-regex> <entry-regex>" prints matching entries of matching jars.
-@list fabric-content-registries (Path|path).*\.class
-net.fabricmc.fabric.api.registry.LandPathTypeRegistry [A-Za-z0-9_$<>]+
-net.minecraft.world.level.pathfinder.PathfindingContext [A-Za-z0-9_$<>]+
-net.minecraft.world.level.pathfinder.PathTypeCache [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.NoiseChunk <init>|wrap|wrapNew|forChunk|cachedClimateSampler
-net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator iterateNoiseColumn|getBaseHeight|getBaseColumn|createNoiseChunk
-net.minecraft.world.level.levelgen.DensityFunctions$HolderHolder mapAll|hashCode|equals
-net.minecraft.world.level.levelgen.DensityFunctions$Ap2 mapAll|hashCode|create
-net.minecraft.core.Holder$Direct hashCode|equals
-@sig minecraft-extracted_server net/minecraft/world/level/levelgen/(DensityFunctions|DensityFunction|NoiseChunk|synth/BlendedNoise|NoiseRouter).*\.class mapAll|implements|class|interface|record
-net.minecraft.world.level.levelgen.DensityFunction mapAll|mapChildren
-net.minecraft.world.level.levelgen.DensityFunction$1RecursiveVisitor [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.DensityFunction$Visitor [A-Za-z0-9_$<>]+
-net.minecraft.world.level.levelgen.NoiseRouter mapAll
-net.minecraft.world.level.levelgen.DensityFunctions$MarkerOrMarked mapChildren|mapAll
-net.minecraft.world.level.levelgen.DensityFunctions$TwoArgumentSimpleFunction mapChildren|create
-net.minecraft.world.level.levelgen.DensityFunctions$Spline mapChildren
-net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager readStructure|tryLoad|loadFromResource|loadFromGenerated|loadFromSnbt|get|getOrCreate|load
-net.minecraft.util.datafix.DataFixTypes update|updateToCurrentVersion
+# "@sig <jar-name-regex> <entry-regex> <member-regex>" prints matching member signatures.
+# Mod jars come from scripts/worldgen-mods.txt, fetched by the inspect job.
+@list [Bb]iolith (MixinClimateRTree|VanillaCompat|BiolithFittestNodes|SimpleArrayIterator|MixinMultiNoiseBiomeSource)[^/]*\.class
+@list ([Ff]ast.?[Nn]oise|fastnoise) (FastNoiseGen|FastBiomeGen)[^/]*\.class
+@sig ([Ff]ast.?[Nn]oise|fastnoise) .*\.class class|interface|@
+@list [Rr]oguelike WorldTickGenerateRooms[^/]*\.class
+@sig [Rr]oguelike .*(WorldEditor|Column)\.class getChunk|isSolid|set\(|class
+@sig minecraft-extracted_server net/minecraft/server/level/(ChunkMap|ChunkHolder|GenerationChunkHolder|ChunkTaskDispatcher|ChunkTaskPriorityQueue|ChunkGenerationTask|ServerChunkCache|DistanceManager|ChunkLevel)\.class .
+net.minecraft.server.level.ServerChunkCache getChunk|getChunkBlocking|getChunkFutureMainThread|runDistanceManagerUpdates
+net.minecraft.server.level.ChunkTaskDispatcher [A-Za-z0-9_$<>]+
+net.minecraft.server.level.ChunkTaskPriorityQueue [A-Za-z0-9_$<>]+
+net.minecraft.server.level.ChunkHolder getQueueLevel|setQueueLevel|updateFutures|onLevelChange
+net.minecraft.server.level.ChunkMap applyStep|scheduleGenerationTask|runGenerationTask|runGenerationTasks|acquireGeneration|releaseGeneration|getChunkQueueLevel|onLevelChange|getOrCreateTicket|scheduleChunkGeneration|prepareAccessibleChunk|updateChunkScheduling
+net.minecraft.server.level.GenerationChunkHolder scheduleChunkGenerationTask|applyStep|getQueueLevel
+net.minecraft.server.level.ChunkGenerationTask [A-Za-z0-9_$<>]+
+net.minecraft.world.level.biome.Climate$RTree [A-Za-z0-9_$<>]+
+net.minecraft.world.level.biome.Climate$RTree$Node distance|<init>
+net.minecraft.world.level.biome.Climate$Parameter distance
+net.minecraft.world.level.biome.Climate$TargetPoint toParameterArray
+net.minecraft.world.level.levelgen.synth.ImprovedNoise [A-Za-z0-9_$<>]+
+net.minecraft.world.level.levelgen.synth.PerlinNoise getValue|wrap|getOctaveNoise|<init>
+net.minecraft.world.level.levelgen.synth.SimplexNoise dot|<clinit>
+net.minecraft.world.level.levelgen.synth.NormalNoise getValue
+net.minecraft.util.Mth lerp|lerp2|lerp3|smoothstep|floor|lfloor
+net.minecraft.world.level.levelgen.NoiseChunk updateForZ|updateForX|updateForY|selectCellYZ|advanceCellX|initializeForFirstCellX|swapSlices|stopInterpolation|getInterpolatedState|fillAllDirectly
+net.minecraft.world.level.levelgen.NoiseChunk$NoiseInterpolator [A-Za-z0-9_$<>]+
+net.minecraft.world.level.levelgen.SurfaceRules$SequenceRule [A-Za-z0-9_$<>]+
+net.minecraft.world.level.levelgen.SurfaceRules$SequenceRuleSource apply
+net.minecraft.world.level.levelgen.SurfaceRules$TestRule [A-Za-z0-9_$<>]+
+net.minecraft.world.level.levelgen.SurfaceRules$TestRuleSource apply
+net.minecraft.world.level.levelgen.SurfaceRules$BiomeConditionSource [A-Za-z0-9_$<>]+
+net.minecraft.world.level.levelgen.SurfaceRules$BiomeConditionSource$1BiomeCondition [A-Za-z0-9_$<>]+
+net.minecraft.world.level.levelgen.SurfaceRules$LazyCondition [A-Za-z0-9_$<>]+
+net.minecraft.world.level.levelgen.SurfaceRules$LazyYCondition [A-Za-z0-9_$<>]+
+net.minecraft.world.level.levelgen.SurfaceRules$Context updateXZ|updateY|<init>
