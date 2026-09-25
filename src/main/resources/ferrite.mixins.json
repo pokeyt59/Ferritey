@@ -46,6 +46,7 @@
 		"MovementRedirectMixin",
 		"PhysicsPreTickMixin",
 		"CrammingCancelMixin",
+		"CrammingStateMixin",
 		"ServerTickPhaseMixin",
 		"RedstoneWireMixin",
 		"RedstoneGateMixin",

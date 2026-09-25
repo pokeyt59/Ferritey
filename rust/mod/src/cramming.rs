@@ -7,6 +7,12 @@
 //! (each pair visited once), applies the vanilla push formula and
 //! accumulates `CrammingResult` deltas.
 //!
+//! Vanilla runs the push from each ticking mob's own pushEntities call,
+//! and every call pushes both members of the pair. So a pair is pushed
+//! once per member that ticks (FLAG_CALLER) and lists the other as
+//! pushable: twice when both tick, once when only one does, never when
+//! neither does.
+//!
 //! Vanilla push math (preserved bit-exactly):
 //!   d = b.x - a.x
 //!   e = b.z - a.z
@@ -118,6 +124,8 @@ pub const FLAG_PUSHABLE:   u8 = 1 << 0;
 pub const FLAG_VEHICLE:    u8 = 1 << 1;
 pub const FLAG_PASSENGER:  u8 = 1 << 2;
 pub const FLAG_NO_PHYSICS: u8 = 1 << 3;
+/// The mob runs its own pushEntities this tick.
+pub const FLAG_CALLER:     u8 = 1 << 4;
 
 // Below this Chebyshev distance, vanilla skips the pair.
 const CONTACT_MIN: f64 = 0.01;
@@ -350,6 +358,16 @@ fn process_pair(
         res_b.crowded_count += 1;
     }
 
+    // --- How many pushEntities calls push this pair ---------------------------
+    // A caller's pushable-entity list only holds pushable neighbours.
+    let a_pushable = (a.flags & FLAG_PUSHABLE) != 0;
+    let b_pushable = (b.flags & FLAG_PUSHABLE) != 0;
+    let calls = u32::from((a.flags & FLAG_CALLER) != 0 && b_pushable)
+        + u32::from((b.flags & FLAG_CALLER) != 0 && a_pushable);
+    if calls == 0 {
+        return;
+    }
+
     // --- Vanilla push math (exact replica) -----------------------------------
     let f = dx.abs().max(dz.abs()); // Chebyshev (Mth.absMax)
     if f < CONTACT_MIN {
@@ -359,11 +377,12 @@ fn process_pair(
     let dn = dx / sqrt_f;
     let en = dz / sqrt_f;
     let g = (1.0 / sqrt_f).min(1.0);
-    let push_dx = dn * g * PUSH_SCALE;
-    let push_dz = en * g * PUSH_SCALE;
+    let scale = calls as f64;
+    let push_dx = dn * g * PUSH_SCALE * scale;
+    let push_dz = en * g * PUSH_SCALE * scale;
 
-    let a_eligible = (a.flags & FLAG_PUSHABLE) != 0 && (a.flags & FLAG_VEHICLE) == 0;
-    let b_eligible = (b.flags & FLAG_PUSHABLE) != 0 && (b.flags & FLAG_VEHICLE) == 0;
+    let a_eligible = a_pushable && (a.flags & FLAG_VEHICLE) == 0;
+    let b_eligible = b_pushable && (b.flags & FLAG_VEHICLE) == 0;
 
     if a_eligible {
         res_a.accum_dx -= push_dx;
@@ -386,7 +405,7 @@ mod tests {
     fn make_mob(id: u32, x: f64, z: f64, min_y: f32, max_y: f32) -> CrammingInput {
         CrammingInput {
             entity_id: id,
-            flags: FLAG_PUSHABLE,
+            flags: FLAG_PUSHABLE | FLAG_CALLER,
             _pad0: [0; 3],
             x,
             z,
@@ -421,7 +440,35 @@ mod tests {
 
         // Magnitude check against hand computation:
         //   dx=0.5 dz=0.5 → f=0.5, sqrt(f)≈0.707, dn=0.707, g=1.0, push≈0.0354
-        assert!((results[1].accum_dx - 0.03535534).abs() < 1e-6);
+        // Both mobs tick, so vanilla pushes the pair twice.
+        assert!((results[1].accum_dx - 2.0 * 0.03535534).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pair_push_counts_ticking_members() {
+        let one_push = 0.03535534;
+        let run = |a_flags: u8, b_flags: u8| {
+            let mut a = make_mob(1, 0.0, 0.0, 64.0, 66.0);
+            let mut b = make_mob(2, 0.5, 0.5, 64.0, 66.0);
+            a.flags = a_flags;
+            b.flags = b_flags;
+            let mut results = [CrammingResult::default(); 2];
+            compute_cramming(&[a, b], &mut results);
+            results
+        };
+        let ticking = FLAG_PUSHABLE | FLAG_CALLER;
+
+        // Only one member ticks: one push call reaches the pair.
+        let r = run(ticking, FLAG_PUSHABLE);
+        assert!((r[1].accum_dx - one_push).abs() < 1e-6, "got {}", r[1].accum_dx);
+        assert!((r[0].accum_dx + one_push).abs() < 1e-6, "got {}", r[0].accum_dx);
+
+        // Neither ticks: no push, but overlap is still counted.
+        let r = run(FLAG_PUSHABLE, FLAG_PUSHABLE);
+        assert_eq!(r[0].accum_dx, 0.0);
+        assert_eq!(r[1].accum_dx, 0.0);
+        assert_eq!(r[0].crowded_count, 1);
+        assert_eq!(r[1].crowded_count, 1);
     }
 
     #[test]
@@ -472,22 +519,29 @@ mod tests {
 
     #[test]
     fn non_pushable_does_not_receive_push_but_pushes_neighbor() {
-        // A is pushable, B is not pushable (vehicle-like). Vanilla still
-        // increments neighbor_count and still pushes A, but skips push on B.
-        let mut a = make_mob(1, 0.0, 0.0, 64.0, 66.0);
+        // A is pushable, B is not pushable (e.g. climbing) but ticks. B's own
+        // pushEntities lists A and pushes it; A's call skips B, since
+        // non-pushables never enter a pushable-entity list.
+        let a = make_mob(1, 0.0, 0.0, 64.0, 66.0);
         let mut b = make_mob(2, 0.5, 0.0, 64.0, 66.0);
-        b.flags = 0; // not pushable
+        b.flags = FLAG_CALLER; // not pushable
         let inputs = [a, b];
         let mut results = [CrammingResult::default(); 2];
-        // silence unused warning from mut above (kept for symmetry with test prep)
-        a.flags |= FLAG_PUSHABLE;
-        let _ = a;
         compute_cramming(&inputs, &mut results);
 
         assert!(results[0].accum_dx < 0.0, "A should still be pushed");
+        assert!((results[0].accum_dx + 0.05 * 0.5f64.sqrt()).abs() < 1e-9,
+                "one push call, got {}", results[0].accum_dx);
         assert_eq!(results[1].accum_dx, 0.0, "B is not pushable → no accum");
         assert_eq!(results[0].neighbor_count, 1);
         assert_eq!(results[1].neighbor_count, 1);
+
+        // Same pair with B not ticking: nothing pushes A.
+        let mut b_idle = b;
+        b_idle.flags = 0;
+        let mut results = [CrammingResult::default(); 2];
+        compute_cramming(&[a, b_idle], &mut results);
+        assert_eq!(results[0].accum_dx, 0.0);
     }
 
     #[test]
@@ -618,12 +672,12 @@ mod tests {
         // cells 2 apart and is silently never tested. The dynamic cell size
         // must grow to ≥ 3.0 so the 3×3 neighbourhood covers this pair.
         let mut a = CrammingInput {
-            entity_id: 1, flags: FLAG_PUSHABLE, _pad0: [0; 3],
+            entity_id: 1, flags: FLAG_PUSHABLE | FLAG_CALLER, _pad0: [0; 3],
             x: 0.0, z: 0.0, aabb_half_width: 1.5,
             aabb_min_y: 64.0, aabb_max_y: 66.0, root_vehicle_id: 1,
         };
         let mut b = CrammingInput {
-            entity_id: 2, flags: FLAG_PUSHABLE, _pad0: [0; 3],
+            entity_id: 2, flags: FLAG_PUSHABLE | FLAG_CALLER, _pad0: [0; 3],
             x: 2.5, z: 0.0, aabb_half_width: 1.5,
             aabb_min_y: 64.0, aabb_max_y: 66.0, root_vehicle_id: 2,
         };

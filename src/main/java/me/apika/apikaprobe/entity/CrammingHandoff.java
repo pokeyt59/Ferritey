@@ -15,7 +15,7 @@ import net.minecraft.world.phys.AABB;
  *
  * CrammingInput (stride = 40 B):
  *   +0   u32   entityId
- *   +4   u8    flags  (pushable | vehicle | passenger | noPhysics)
+ *   +4   u8    flags  (pushable | vehicle | passenger | noPhysics | caller)
  *   +5   3B    pad
  *   +8   f64   x
  *   +16  f64   z
@@ -44,6 +44,7 @@ public final class CrammingHandoff {
 	public static final int FLAG_VEHICLE     = 1 << 1;
 	public static final int FLAG_PASSENGER   = 1 << 2;
 	public static final int FLAG_NO_PHYSICS  = 1 << 3;
+	public static final int FLAG_CALLER      = 1 << 4;
 
 	public static final ByteBuffer REQUEST_BUF =
 			ByteBuffer.allocateDirect(MAX_ENTITIES * REQUEST_STRIDE).order(ByteOrder.nativeOrder());
@@ -55,8 +56,9 @@ public final class CrammingHandoff {
 	/**
 	 * Fills REQUEST_BUF with one 40B entry per mob. Mobs with noPhysics or
 	 * passenger state are included (Rust skips them on the flags check).
+	 * {@code callers[i]} marks mobs whose own pushEntities runs this tick.
 	 */
-	public static void buildRequests(List<? extends LivingEntity> mobs) {
+	public static void buildRequests(List<? extends LivingEntity> mobs, boolean[] callers) {
 		int n = mobs.size();
 		if (n > MAX_ENTITIES) {
 			throw new IllegalStateException("cramming input exceeds MAX_ENTITIES: " + n);
@@ -72,6 +74,7 @@ public final class CrammingHandoff {
 			if (e.isVehicle()) flags |= FLAG_VEHICLE;
 			if (e.isPassenger())    flags |= FLAG_PASSENGER;
 			if (e.noPhysics)          flags |= FLAG_NO_PHYSICS;
+			if (callers[i])           flags |= FLAG_CALLER;
 
 			float halfWidth = (float) ((aabb.maxX - aabb.minX) * 0.5);
 

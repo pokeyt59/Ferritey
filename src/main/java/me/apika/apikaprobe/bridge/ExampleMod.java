@@ -103,6 +103,7 @@ public class ExampleMod implements ModInitializer {
 		HopperPerSlotMonitor.register();
 		ItemFrameMonitor.register();
 		PhysicsOracle.register();
+		CrammingDispatcher.register();
 		// PreChunkMonitor must register BEFORE PreChunkDispatcher so its
 		// END_SERVER_TICK report handler fires first and reads the window
 		// before the dispatcher's handler increments it further.
