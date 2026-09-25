@@ -39,31 +39,17 @@ marks pre-release research builds.
   oracle compared 180,797 rays with Lithium's clip and found no
   difference. `/ferrite raycast air-skip on|off|status`,
   `-Dferrite.clip.airskip=false`.
-- **Brains walk their behavior table through a flat copy.** Every
-  brain tick (villagers, piglins, axolotls, frogs, goats and other brain
-  mobs) walked a TreeMap of HashMaps of LinkedHashSets twice: once to try
-  each stopped behavior of an active activity, once to collect the
-  running ones. The table only changes in `Brain.addActivity` and
-  `removeAllBehaviors`, so both loops now walk an array copy in the same
-  order, rebuilt after either call; active activities and behavior
-  status are still read live. In the CI bench's profile the behavior
-  start loop took about a third fewer samples and villagers went from
-  about 13% to 11.6% of the server thread; with 60 villagers that is
-  below the MSPT noise (about 0.1 ms/tick), and it grows with villager
-  count. The oracle rebuilt and compared 1,207 copies without a
-  difference. `/ferrite ai brain-cache on|off|status`,
-  `-Dferrite.ai.braincache=false`.
-- **Path type lookups skip Fabric API's empty hook.** Fabric API's
-  content-registries hook sits in `PathfindingContext.getPathTypeFromState`,
-  the lookup behind every node a land pathfinder evaluates, ahead of
-  vanilla's path type cache: a block lookup and a registry lookup per
-  call, which only matter for blocks some mod registered. While nothing
-  is registered (checked on every call) and no other mod hooks that
-  method (checked once), Ferrite runs the method's vanilla body before
-  the hook. In the CI bench's profile, pathfinding fell from 5.6-5.8% of
-  the server thread to 3.3%. 85.9 million lookups took the shortcut in
-  one bench run. `/ferrite ai pathtype-bypass on|off|status`,
-  `-Dferrite.ai.pathtypebypass=false`.
+- **Brain behavior table cache (experimental, off by default).** Every
+  brain tick walks a TreeMap of HashMaps of LinkedHashSets twice (try
+  each stopped behavior of an active activity, then collect the running
+  ones). With `/ferrite ai brain-cache on` (or
+  `-Dferrite.ai.braincache=true`) both loops walk an array copy in the
+  same order, rebuilt after `Brain.addActivity` or `removeAllBehaviors`;
+  active activities and behavior status are still read live, and an
+  oracle rebuilds and compares the copy on 1 in 1024 uses (1,547 checks,
+  no difference). In a same-run profile A/B it cut the behavior start
+  loop by about 15% but not `Brain.tick` as a whole, and MSPT showed no
+  gain, so it ships off.
 - **Lean mode with spark.** When spark is installed, about thirty
   timing-only mixins are left out at launch and monitor reports start
   off. `-Dferrite.diagnostics=true|false` or

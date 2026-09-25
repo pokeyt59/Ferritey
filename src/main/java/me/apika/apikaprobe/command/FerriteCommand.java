@@ -1972,8 +1972,8 @@ public final class FerriteCommand {
 
 	/**
 	 * /ferrite ai brain-cache on|off|status: whether brains walk their
-	 * behavior table through the flat copy. Session only;
-	 * -Dferrite.ai.braincache=false sets the boot default.
+	 * behavior table through the flat copy. Session only; off by default,
+	 * -Dferrite.ai.braincache=true turns it on at boot.
 	 */
 	private static int setBrainCache(
 			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {

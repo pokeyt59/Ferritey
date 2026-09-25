@@ -8,7 +8,7 @@
 #   town: 60 villagers in a closed pen (brains, POI lookups)
 #   boat: one parked boat, as on any real server (a hard collider in the level)
 # Arms come from BENCH_ARMS: "name=cmd;cmd|name2=cmd" (empty cmd list is
-# allowed). Each arm runs BENCH_ROUNDS times (4), interleaved, to cancel drift.
+# allowed). Each arm runs BENCH_ROUNDS times (5), in an order that rotates each round.
 # Extra arguments go to gradle.
 set -euo pipefail
 
@@ -17,9 +17,10 @@ REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
 SAMPLES=${BENCH_SAMPLES:-4}
-ROUNDS=${BENCH_ROUNDS:-4}
-ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on;ferrite ai brain-cache on;ferrite ai pathtype-bypass on"
-BENCH_ARMS=${BENCH_ARMS:-"all-on=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|brain-vanilla=$ON;ferrite ai brain-cache off|pathtype-fabric=$ON;ferrite ai pathtype-bypass off"}
+ROUNDS=${BENCH_ROUNDS:-5}
+# ON is the shipped defaults; each other arm flips one switch.
+ON="ferrite raycast air-skip on;ferrite cramming on;ferrite entityquery index on;ferrite ai brain-cache off;ferrite ai pathtype-bypass on"
+BENCH_ARMS=${BENCH_ARMS:-"defaults=$ON|clip-vanilla=$ON;ferrite raycast air-skip off|cramming-vanilla=$ON;ferrite cramming off|brain-cache-on=$ON;ferrite ai brain-cache on|pathtype-fabric=$ON;ferrite ai pathtype-bypass off"}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
@@ -126,7 +127,7 @@ IFS='|' read -r -a ARMS <<< "$BENCH_ARMS"
 declare -A SUM COUNT
 : > "$REPORT"
 
-# Profile in its own window, every optimisation on, so the recording's
+# Profile in its own window, shipped defaults, so the recording's
 # overhead lands on no scored arm. profile.jfc with Java execution
 # sampling forced to 2 ms.
 IFS=';' read -r -a on_cmds <<< "$ON"
@@ -136,13 +137,13 @@ sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(perio
 grep -A4 '<event name="jdk.ExecutionSample">' bench.jfc || true
 jcmd "$GAME_PID" JFR.start name=bench settings="$PWD/bench.jfc" \
 	duration=$((SAMPLES * 5))s filename="$PWD/bench.jfr" > /dev/null
-echo "JFR recording $((SAMPLES * 5)) s with every optimisation on (unscored)"
+echo "JFR recording $((SAMPLES * 5)) s with the shipped defaults (unscored)"
 sleep $((SAMPLES * 5 + 5))
 
 # Profile A/B: equal JFR windows on the same server, one switch off per
-# window, for effects smaller than the MSPT noise. "on" is recorded
-# twice to show the window-to-window spread.
-PROFILES=${BENCH_PROFILES:-"on=|brain-off=ferrite ai brain-cache off|pathtype-off=ferrite ai pathtype-bypass off|on-again="}
+# window, for effects smaller than the MSPT noise. "defaults" is
+# recorded twice to show the window-to-window spread.
+PROFILES=${BENCH_PROFILES:-"defaults=|brain-cache-on=ferrite ai brain-cache on|pathtype-off=ferrite ai pathtype-bypass off|defaults-again="}
 PROFILE_SECONDS=${BENCH_PROFILE_SECONDS:-20}
 IFS='|' read -r -a PROFS <<< "$PROFILES"
 for spec in "${PROFS[@]}"; do
@@ -181,8 +182,12 @@ run_arm() {
 	done
 }
 
+# The order rotates each round, so with as many rounds as arms every arm
+# runs once in every position: an arm that leaves the scene in a state
+# (vanilla cramming reshapes the pile) biases no single other arm.
 for round in $(seq "$ROUNDS"); do
-	for spec in "${ARMS[@]}"; do
+	for k in $(seq 0 $((${#ARMS[@]} - 1))); do
+		spec=${ARMS[$(( (k + round - 1) % ${#ARMS[@]} ))]}
 		echo "round $round arm ${spec%%=*}"
 		run_arm "$spec"
 	done

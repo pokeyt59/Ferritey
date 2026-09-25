@@ -24,12 +24,17 @@ import net.minecraft.world.entity.schedule.Activity;
  * while the loop runs has the same effect.
  *
  * The oracle rebuilds the copy on 1 in N uses and logs any difference
- * from the cached one. Kill switch -Dferrite.ai.braincache=false;
- * /ferrite ai brain-cache on|off|status toggles it for A/B.
+ * from the cached one. /ferrite ai brain-cache on|off|status toggles it
+ * for A/B.
  */
 public final class BrainBehaviorCache {
 
-	public static volatile boolean ENABLED = !"false".equals(System.getProperty("ferrite.ai.braincache"));
+	/**
+	 * Off by default: the CI bench's profile A/B cut the behavior start
+	 * loop by about 15% but not Brain.tick as a whole, and MSPT showed no
+	 * gain. -Dferrite.ai.braincache=true or /ferrite ai brain-cache on.
+	 */
+	public static volatile boolean ENABLED = Boolean.getBoolean("ferrite.ai.braincache");
 
 	/** Oracle: rebuild and compare 1 in N uses; 0 disables. */
 	public static final int ORACLE_RATE = Integer.getInteger("ferrite.ai.braincache.oracle", 1024);
