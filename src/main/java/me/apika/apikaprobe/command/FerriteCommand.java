@@ -319,40 +319,28 @@ public final class FerriteCommand {
 		return Command.SINGLE_SUCCESS;
 	}
 
+	/**
+	 * The hopper layer (extract hint, per-slot fire, lane routing) hooked
+	 * HopperBlockEntity, and those hooks were not carried into the 26.x
+	 * ports. The commands stay so old scripts get an answer, not an error.
+	 */
+	private static final String HOPPER_UNAVAILABLE =
+			"[hopper] the hopper layer is not in the 26.x builds (its HopperBlockEntity hooks were not ported); hoppers run vanilla";
+
 	private static int enableHopper(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-		me.apika.apikaprobe.monitor.HopperHintMonitor.USE_HINT = true;
-		me.apika.apikaprobe.hopper.PerSlotFireConfig.ENABLE = true;
-		me.apika.apikaprobe.hopper.HopperLaneRouteConfig.ENABLE = true;
-		me.apika.apikaprobe.config.FerriteConfig.setString(
-				me.apika.apikaprobe.config.FerriteConfig.KEY_HOPPER, "true");
-		String msg = "[hopper] Ferrite hopper layer ENABLED (extract hint + per-slot fire + lane routing)";
-		sendFeedback(ctx, msg, true);
-		ExampleMod.LOGGER.info(msg);
-		return Command.SINGLE_SUCCESS;
+		sendFeedback(ctx, HOPPER_UNAVAILABLE, false);
+		return 0;
 	}
 
 	private static int disableHopper(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-		me.apika.apikaprobe.monitor.HopperHintMonitor.USE_HINT = false;
-		me.apika.apikaprobe.hopper.PerSlotFireConfig.ENABLE = false;
-		me.apika.apikaprobe.hopper.HopperLaneRouteConfig.ENABLE = false;
 		me.apika.apikaprobe.config.FerriteConfig.setString(
-				me.apika.apikaprobe.config.FerriteConfig.KEY_HOPPER, "false");
-		String msg = "[hopper] Ferrite hopper layer DISABLED, vanilla hopper paths active";
-		sendFeedback(ctx, msg, true);
-		ExampleMod.LOGGER.info(msg);
+				me.apika.apikaprobe.config.FerriteConfig.KEY_HOPPER, null);
+		sendFeedback(ctx, HOPPER_UNAVAILABLE, false);
 		return Command.SINGLE_SUCCESS;
 	}
 
 	private static int statusHopper(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-		String msg = String.format(
-			"[hopper] hint=%s perslot=%s lane=%s  (validate flags: hint=%s perslot=%s)",
-			me.apika.apikaprobe.monitor.HopperHintMonitor.USE_HINT,
-			me.apika.apikaprobe.hopper.PerSlotFireConfig.ENABLE,
-			me.apika.apikaprobe.hopper.HopperLaneRouteConfig.ENABLE,
-			me.apika.apikaprobe.monitor.HopperHintMonitor.VALIDATE,
-			me.apika.apikaprobe.hopper.PerSlotFireConfig.VALIDATE);
-		sendFeedback(ctx, msg, false);
-		ExampleMod.LOGGER.info(msg);
+		sendFeedback(ctx, HOPPER_UNAVAILABLE, false);
 		return Command.SINGLE_SUCCESS;
 	}
 

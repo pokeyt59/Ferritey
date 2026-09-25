@@ -28,8 +28,9 @@ public final class WorldTickMonitor {
 
 	private static final long REPORT_INTERVAL_NS = 5_000_000_000L;
 
-	private static final ThreadLocal<Long> BLOCK_ENTITY_START = ThreadLocal.withInitial(() -> 0L);
-	private static final ThreadLocal<Long> ENTITY_START = ThreadLocal.withInitial(() -> 0L);
+	// long[1] holders: a ThreadLocal<Long> boxed a new Long per entity per tick.
+	private static final ThreadLocal<long[]> BLOCK_ENTITY_START = ThreadLocal.withInitial(() -> new long[1]);
+	private static final ThreadLocal<long[]> ENTITY_START = ThreadLocal.withInitial(() -> new long[1]);
 
 	// Per-tick running sum of entity durations. Reset on END_SERVER_TICK,
 	// then pushed to the window accumulators as one sample.
@@ -53,22 +54,25 @@ public final class WorldTickMonitor {
 	// --- Phase hooks --------------------------------------------------------
 
 	public static void onBlockEntitiesBegin() {
-		BLOCK_ENTITY_START.set(System.nanoTime());
+		if (!MonitorLog.ENABLED) return;
+		BLOCK_ENTITY_START.get()[0] = System.nanoTime();
 	}
 
 	public static void onBlockEntitiesEnd() {
-		long start = BLOCK_ENTITY_START.get();
+		long[] st = BLOCK_ENTITY_START.get();
+		long start = st[0];
 		if (start == 0L) {
 			return;
 		}
-		BLOCK_ENTITY_START.set(0L);
+		st[0] = 0L;
 		long duration = System.nanoTime() - start;
 		BE_TOTAL_NS.addAndGet(duration);
 		BE_MAX_NS.updateAndGet(prev -> Math.max(prev, duration));
 	}
 
 	public static void onEntityBegin() {
-		ENTITY_START.set(System.nanoTime());
+		if (!MonitorLog.ENABLED) return;
+		ENTITY_START.get()[0] = System.nanoTime();
 	}
 
 	/**
@@ -84,11 +88,12 @@ public final class WorldTickMonitor {
 	}
 
 	public static void onEntityEnd() {
-		long start = ENTITY_START.get();
+		long[] st = ENTITY_START.get();
+		long start = st[0];
 		if (start == 0L) {
 			return;
 		}
-		ENTITY_START.set(0L);
+		st[0] = 0L;
 		long duration = System.nanoTime() - start;
 		ENTITY_THIS_TICK_NS.addAndGet(duration);
 	}

@@ -79,6 +79,7 @@ public final class NavigationMonitor {
 	}
 
 	public static void onFindPathBegin() {
+		if (!MonitorLog.ENABLED) return;
 		START_NS.get()[0] = System.nanoTime();
 	}
 

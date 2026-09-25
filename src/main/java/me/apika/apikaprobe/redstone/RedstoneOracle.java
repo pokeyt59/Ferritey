@@ -146,7 +146,9 @@ public final class RedstoneOracle {
 	public static void onWireUpdateBegin(
 			Level world, BlockPos pos, BlockState state,
 			Orientation orientation, boolean blockAdded) {
-		if (!ENABLED || world.isClientSide()) return;
+		// With AC off the wire runs vanilla, so the check would compare
+		// vanilla with itself.
+		if (!ENABLED || !FerriteWireConfig.ENABLED || world.isClientSide()) return;
 		int[] depth = DEPTH.get();
 		if (depth[0]++ != 0) return;
 		Snapshot snap = SNAPSHOT.get();
@@ -168,7 +170,7 @@ public final class RedstoneOracle {
 	}
 
 	public static void onWireUpdateEnd(Level world, BlockPos pos) {
-		if (!ENABLED || world.isClientSide()) return;
+		if (!ENABLED || !FerriteWireConfig.ENABLED || world.isClientSide()) return;
 		int[] depth = DEPTH.get();
 		if (--depth[0] != 0) {
 			if (depth[0] < 0) depth[0] = 0;

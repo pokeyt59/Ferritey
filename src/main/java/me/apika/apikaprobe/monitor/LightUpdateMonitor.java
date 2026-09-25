@@ -21,7 +21,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 public final class LightUpdateMonitor {
 	private static final long REPORT_INTERVAL_NS = 5_000_000_000L;
 
-	private static final ThreadLocal<Long> UPDATE_START = ThreadLocal.withInitial(() -> 0L);
+	private static final ThreadLocal<long[]> UPDATE_START = ThreadLocal.withInitial(() -> new long[1]);
 
 	private static final AtomicLong FEED_COUNT = new AtomicLong();
 
@@ -39,20 +39,23 @@ public final class LightUpdateMonitor {
 	}
 
 	public static void onFeed() {
+		if (!MonitorLog.ENABLED) return;
 		FEED_COUNT.incrementAndGet();
 	}
 
 	public static void onUpdateStart(int backlog) {
-		UPDATE_START.set(System.nanoTime());
+		if (!MonitorLog.ENABLED) return;
+		UPDATE_START.get()[0] = System.nanoTime();
 		BACKLOG_MAX.updateAndGet(prev -> Math.max(prev, backlog));
 	}
 
 	public static void onUpdateEnd() {
-		long start = UPDATE_START.get();
+		long[] st = UPDATE_START.get();
+		long start = st[0];
 		if (start == 0L) {
 			return;
 		}
-		UPDATE_START.set(0L);
+		st[0] = 0L;
 		long duration = System.nanoTime() - start;
 		UPDATE_COUNT.incrementAndGet();
 		UPDATE_TOTAL_NS.addAndGet(duration);

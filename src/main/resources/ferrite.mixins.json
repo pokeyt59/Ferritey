@@ -42,7 +42,6 @@
 		"GoalSelectorMixin",
 		"MoveControlMixin",
 		"LookControlMixin",
-		"LootableContainerExtractHintMixin",
 		"EntityAdjustInvoker",
 		"MovementRedirectMixin",
 		"PhysicsPreTickMixin",

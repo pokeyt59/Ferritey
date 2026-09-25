@@ -66,6 +66,7 @@ public final class MonsterPhaseMonitor {
 	// --- Phase hooks --------------------------------------------------------
 
 	public static void onBaseTickBegin() {
+		if (!MonitorLog.ENABLED) return;
 		PHASE_START.get()[PHASE_BASE] = System.nanoTime();
 	}
 
@@ -74,6 +75,7 @@ public final class MonsterPhaseMonitor {
 	}
 
 	public static void onMovementBegin() {
+		if (!MonitorLog.ENABLED) return;
 		PHASE_START.get()[PHASE_MOVEMENT] = System.nanoTime();
 	}
 
@@ -82,6 +84,7 @@ public final class MonsterPhaseMonitor {
 	}
 
 	public static void onMobTickBegin() {
+		if (!MonitorLog.ENABLED) return;
 		PHASE_START.get()[PHASE_MOBTICK] = System.nanoTime();
 	}
 

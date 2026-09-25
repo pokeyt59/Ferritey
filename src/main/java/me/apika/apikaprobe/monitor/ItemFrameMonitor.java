@@ -33,6 +33,9 @@ public final class ItemFrameMonitor {
 
 	public static void register() {
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			// Counting walks every entity in every level; skip it while
+			// nothing would print the result.
+			if (!MonitorLog.ENABLED) return;
 			long now = System.nanoTime();
 			if (now - lastReportNs < REPORT_INTERVAL_NS) return;
 			lastReportNs = now;
