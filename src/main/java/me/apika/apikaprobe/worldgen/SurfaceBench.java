@@ -54,6 +54,18 @@ public final class SurfaceBench {
 	private SurfaceBench() {}
 
 	public static String run(ServerLevel level, int chunks, int rounds) {
+		try {
+			return runChecked(level, chunks, rounds);
+		} catch (Throwable t) {
+			StringBuilder sb = new StringBuilder("[surface-bench] failed: ").append(t);
+			StackTraceElement[] frames = t.getStackTrace();
+			for (int i = 0; i < Math.min(8, frames.length); i++) sb.append(" < ").append(frames[i]);
+			if (t.getCause() != null) sb.append(" caused by ").append(t.getCause());
+			return sb.toString();
+		}
+	}
+
+	private static String runChecked(ServerLevel level, int chunks, int rounds) {
 		ChunkGenerator generator = level.getChunkSource().getGenerator();
 		if (!(generator instanceof NoiseBasedChunkGenerator noise)) return "[surface-bench] not a noise generator";
 		RandomState random = level.getChunkSource().randomState();

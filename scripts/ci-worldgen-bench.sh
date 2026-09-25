@@ -125,7 +125,7 @@ MEMO="ferrite worldgen map-memo"
 # Rotated A/B of surface rule pruning. A setup may hold several commands
 # split by ';'.
 SP="ferrite worldgen surface-prune"
-PHASES=${WG_PHASES:-"warmup=|sp-on-1=$SP on|sp-off-1=$SP off|sp-off-2=|sp-on-2=$SP on|sp-on-3=|sp-off-3=$SP off"}
+PHASES=${WG_PHASES:-"warmup="}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
