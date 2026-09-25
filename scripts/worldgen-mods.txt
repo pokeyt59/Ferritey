@@ -1,23 +1,25 @@
-# Worldgen-relevant mods from the server this bench models, as
-# "modrinth-slug=Display Name" (the name is searched when the slug has no
-# build for this Minecraft version). Required dependencies are fetched
-# automatically; mods without a build are reported and skipped.
-lithium=Lithium
-scalablelux=ScalableLux
-fast-noise=Fast Noise
-terralith=Terralith
-biolith=Biolith
-lithostitched=Lithostitched
-climate-rivers=Climate Rivers
-deeper-oceans=Deeper Oceans
-formations=Formations
-formations-nether=Formations Nether
-hopo-better-mineshaft=Hopo Better Mineshaft
-hopo-better-underwater-ruins=Hopo Better Underwater Ruins
-moogs-end-structures=MoogsEndStructures
-moogs-nether-structures=MoogsNetherStructures
-ati-structures=ATi Structures
-ati-structures-vanilla-edition=ATi Structures Vanilla Edition
-better-trees=Better Trees
-dungeons-plus=Dungeons+
-roguelike-dungeons=Roguelike Dungeons
+# Worldgen-relevant mods from the server this bench models, pinned to the
+# versions it runs, as "modrinth-slug@version=Display Name" (the name is
+# searched when the slug has no build for this Minecraft version).
+# Required dependencies are fetched automatically; list a dependency
+# before the mod that needs it to pin its version too. Mods without a
+# build are reported and skipped. Moog's End and Nether structures are
+# left out: this bench explores the Overworld.
+lithium@0.25.2=Lithium
+scalablelux@0.3.0-alpha.0.3=ScalableLux
+fast-noise@1.1.0-beta.4=Fast Noise
+terralith@2.6.4=Terralith
+biolith@3.6.0-alpha.9=Biolith
+lithostitched@1.7.13=Lithostitched
+forge-config-api-port@26.2.1=Forge Config API Port
+puzzles-lib@26.2.1=Puzzles Lib
+climate-rivers@26.2.0=Climate Rivers
+deeper-oceans@2.0.1=Deeper Oceans
+formations@1.0.4=Formations
+hopo-better-mineshaft@1.3.7=Hopo Better Mineshaft
+hopo-better-underwater-ruins@1.2.8=Hopo Better Underwater Ruins
+ati-structures@1.4.5=ATi Structures
+ati-structures-vanilla-edition@1.4.5=ATi Structures Vanilla Edition
+better-trees@1.9.3=Better Trees
+dungeons-plus@1.12.0=Dungeons+
+roguelike-dungeons@2.1.2=Roguelike Dungeons

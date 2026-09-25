@@ -4,9 +4,11 @@ required dependencies.
 
 Usage: modrinth-fetch.py <minecraft-version> <dest-dir> <mod>...
 
-Each <mod> is a Modrinth slug, or "slug=Display Name": when the slug has
-no Fabric build for this version, the name is searched and the top hit
-for this version is used.
+Each <mod> is "slug[@version][=Display Name]". "@version" picks that
+version_number (exact, else the first containing it) instead of the
+newest; "=Display Name" is searched when the slug has no Fabric build
+for this Minecraft version. Pinned mods listed before a mod that needs
+them take the place of the newest version as its dependency.
 
 Prints one line per mod: "loaded <mod> <version>" or "missing <mod>".
 Fabric API is skipped: the dev runtime already has it. Exits 0 even when
@@ -28,14 +30,22 @@ def get(url):
         return json.load(r)
 
 
-def latest(project, mc):
+def latest(project, mc, want=""):
     q = urllib.parse.urlencode({"loaders": json.dumps(["fabric"]), "game_versions": json.dumps([mc])})
     try:
         versions = get(f"{API}/project/{project}/version?{q}")
     except Exception as e:  # unknown project, network error
         print(f"error {project} {e}", file=sys.stderr)
         return None
-    return versions[0] if versions else None
+    if not versions:
+        return None
+    if want:
+        exact = [v for v in versions if v["version_number"] == want]
+        near = [v for v in versions if want in v["version_number"]]
+        if exact or near:
+            return (exact or near)[0]
+        print(f"note {project}: version {want} not found, using {versions[0]['version_number']}", file=sys.stderr)
+    return versions[0]
 
 
 def search(name, mc):
@@ -62,19 +72,20 @@ def main():
     jars = {}        # label -> downloaded jar
     parent = {}      # dependency label -> label of the mod that needs it
     for m in mods:
-        slug, _, name = m.partition("=")
-        queue.append((slug, m, name))
+        spec, _, name = m.partition("=")
+        slug, _, want = spec.partition("@")
+        queue.append((slug, m, name, want))
     while queue:
-        project, label, name = queue.pop(0)
+        project, label, name, want = queue.pop(0)
         if project in done or project in FABRIC_API:
             continue
         done.add(project)
-        v = latest(project, mc)
+        v = latest(project, mc, want)
         if v is None and name:
             found = search(name, mc)
             if found and found not in done:
                 done.add(found)
-                v = latest(found, mc)
+                v = latest(found, mc, want)
         if v is None:
             print(f"missing {label}")
             # A mod whose required dependency is missing would stop the
@@ -100,7 +111,7 @@ def main():
                 if pid not in done and pid not in FABRIC_API:
                     dep_label = f"{label.partition('=')[0]}->dependency:{pid}"
                     parent[dep_label] = label
-                    queue.append((pid, dep_label, ""))
+                    queue.append((pid, dep_label, "", ""))
 
 
 if __name__ == "__main__":
