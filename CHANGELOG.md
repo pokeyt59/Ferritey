@@ -50,6 +50,19 @@ marks pre-release research builds.
   no difference). In a same-run profile A/B it cut the behavior start
   loop by about 15% but not `Brain.tick` as a whole, and MSPT showed no
   gain, so it ships off.
+- **Path type lookups skip Fabric API's empty hook.** Fabric API's
+  content-registries hook sits in `PathfindingContext.getPathTypeFromState`,
+  the lookup behind every node a land pathfinder evaluates, ahead of
+  vanilla's path type cache: a block lookup and a registry lookup per
+  call, which only matter for blocks some mod registered. While nothing
+  is registered (checked on every call) and no other mod hooks that
+  method (checked once), Ferrite runs the method's vanilla body before
+  the hook. In a same-run profile A/B (equal JFR windows), pathfinding
+  took 60-64 samples per window with the shortcut and 95 without, and
+  Fabric's hook (64 samples) no longer appears; across runs it fell from
+  5.6-5.8% of the server thread to 3.1-3.3%. The change is below the
+  bench's MSPT noise. `/ferrite ai pathtype-bypass on|off|status`,
+  `-Dferrite.ai.pathtypebypass=false`.
 - **Lean mode with spark.** When spark is installed, about thirty
   timing-only mixins are left out at launch and monitor reports start
   off. `-Dferrite.diagnostics=true|false` or
@@ -104,8 +117,8 @@ marks pre-release research builds.
   `pushEntities`: 8.92 ms/tick against 10.99 ms in a four-round run
   (ahead in every round by 1.4 to 2.4 ms), and 9.14 against 12.37 and
   7.94 against 10.09 on other runners (same runner per pair,
-  interleaved arms). With
-  Lithium installed, turning the entity query index's queries off
+  interleaved arms). With Lithium installed, turning the entity query
+  index's queries off
   measured -0.1, +0.1 and +0.7 ms/tick over three runs, so it stays on
   with no consistent gain; the typed grid and the per-section collider
   skip measured within 0.2 ms.
