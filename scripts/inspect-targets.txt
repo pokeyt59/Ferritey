@@ -18,3 +18,5 @@ net.minecraft.world.level.levelgen.NoiseRouter mapAll
 net.minecraft.world.level.levelgen.DensityFunctions$MarkerOrMarked mapChildren|mapAll
 net.minecraft.world.level.levelgen.DensityFunctions$TwoArgumentSimpleFunction mapChildren|create
 net.minecraft.world.level.levelgen.DensityFunctions$Spline mapChildren
+net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager readStructure|tryLoad|loadFromResource|loadFromGenerated|loadFromSnbt|get|getOrCreate|load
+net.minecraft.util.datafix.DataFixTypes update|updateToCurrentVersion
