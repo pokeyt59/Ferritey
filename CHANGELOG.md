@@ -128,6 +128,21 @@ marks pre-release research builds.
 - **Inspect job** (commit tag `[inspect]`): prints `javap -c` of the
   vanilla methods listed in `scripts/inspect-targets.txt`, so mixins can
   be checked against this version's bytecode.
+- **Worldgen bench** (commit tag `[worldgen-bench]` or a manual run with
+  `worldgen`): live chunk generation on a list of worldgen mods pinned to
+  known 26.2 versions (`scripts/worldgen-mods.txt`: Terralith, Biolith,
+  Lithostitched, Climate Rivers, Deeper Oceans, structure mods, Lithium,
+  ScalableLux, Fast Noise), fetched from Modrinth with their required
+  dependencies. The JVM is pinned to 4 vCPUs (2 cores with 2 threads each)
+  with a 300-husk pen ticking. A corridor of chunk requests advances
+  through fresh terrain at 9 chunks/s, and the job reports tick time
+  against an idle baseline, chunks delivered, request-to-loaded latency
+  and backlog. A JFR recording of every thread is split by thread group
+  and worldgen stage (`scripts/JfrStages.java`).
+  Chunks are requested with `/ferrite bench explore add|status|reset`,
+  asynchronous loading tickets like a player's view. `/forceload`
+  loads each chunk synchronously inside the command, and the first runs
+  measured their own multi-second server stalls because of it.
 
 ## [0.7.4-alpha] - 2026-09-07
 
