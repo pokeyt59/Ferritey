@@ -33,9 +33,10 @@ marks pre-release research builds.
   answers air at once; every other block, the hit and the miss result are
   computed as vanilla does. Only `LivingEntity.hasLineOfSight` takes this
   path; other rays keep vanilla's (or Lithium's) clip. CI bench (1000
-  husks, 60 villagers behind glass, Lithium): 7.94 ms/tick with the skip,
-  8.47 ms without; the oracle compared 110,716 rays with Lithium's clip
-  and found no difference. `/ferrite raycast air-skip on|off|status`,
+  husks, 60 villagers behind glass, Lithium): 9.14 ms/tick with the skip,
+  10.21 ms without (a first version that reused vanilla's walk saved
+  0.5 ms); the oracle compared 124,592 rays with Lithium's clip and found
+  no difference. `/ferrite raycast air-skip on|off|status`,
   `-Dferrite.clip.airskip=false`.
 - **Lean mode with spark.** When spark is installed, about thirty
   timing-only mixins are left out at launch and monitor reports start
@@ -88,10 +89,11 @@ marks pre-release research builds.
 
 ### Measured
 - On the CI bench, Ferrite's cramming batch against vanilla's
-  `pushEntities`: 7.94 ms/tick against 10.09 ms (same runner, interleaved
-  arms). The entity query index measured no gain with Lithium installed
-  (index queries off: 7.86 ms), nor did the typed grid or the
-  per-section collider skip (all within 0.2 ms).
+  `pushEntities`: 9.14 ms/tick against 12.37 ms, and 7.94 against 10.09
+  on another runner (same runner per pair, interleaved arms). The entity
+  query index measured between no gain and 0.7 ms with Lithium installed
+  (index queries off: 9.82 and 7.86 ms); the typed grid and the
+  per-section collider skip measured within 0.2 ms.
 
 ### CI
 - Rust tests run on every push, and a headless dedicated-server smoke
