@@ -1,0 +1,6 @@
+# One target per line: <fully.qualified.Class> <method-name-regex>
+# The CI inspect job prints javap -c -p for each matching method.
+net.minecraft.world.entity.Entity updateFluidHeightAndDoFluidPushing|updateInWaterStateAndDoFluidPushing|touchingUnloadedChunk|updateInLava|baseTick
+net.minecraft.world.entity.LivingEntity baseTick
+net.minecraft.world.level.chunk.LevelChunkSection setBlockState|recalcBlockCounts|LevelChunkSection
+net.minecraft.world.level.chunk.PalettedContainer count
