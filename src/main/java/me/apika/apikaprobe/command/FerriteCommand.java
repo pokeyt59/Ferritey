@@ -222,6 +222,23 @@ public final class FerriteCommand {
 										.then(Commands.argument("seconds", IntegerArgumentType.integer(5, 600))
 												.then(Commands.argument("runsPerArm", IntegerArgumentType.integer(1, 10))
 														.executes(FerriteCommand::arrivalSuiteStart))))))
+				.then(Commands.literal("tickwatch")
+						.then(Commands.argument("ms", IntegerArgumentType.integer(20, 60000))
+								.executes(ctx -> {
+									me.apika.apikaprobe.monitor.SlowTickWatchdog.start(ctx.getSource().getServer(),
+											IntegerArgumentType.getInteger(ctx, "ms"));
+									sendFeedback(ctx, me.apika.apikaprobe.monitor.SlowTickWatchdog.status(), true);
+									return Command.SINGLE_SUCCESS;
+								}))
+						.then(Commands.literal("off").executes(ctx -> {
+							me.apika.apikaprobe.monitor.SlowTickWatchdog.stop();
+							sendFeedback(ctx, me.apika.apikaprobe.monitor.SlowTickWatchdog.status(), true);
+							return Command.SINGLE_SUCCESS;
+						}))
+						.then(Commands.literal("status").executes(ctx -> {
+							sendFeedback(ctx, me.apika.apikaprobe.monitor.SlowTickWatchdog.status(), false);
+							return Command.SINGLE_SUCCESS;
+						})))
 				.then(Commands.literal("bench")
 						.then(Commands.literal("columns")
 								.then(Commands.argument("queries", IntegerArgumentType.integer(1, 100000))

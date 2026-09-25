@@ -124,6 +124,8 @@ sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(perio
 	"$JAVA_HOME/lib/jfr/profile.jfc" > worldgen.jfc
 x=$START_X
 recorded=
+# Log what the server thread does in any tick gap over 100 ms.
+rcon "ferrite tickwatch 100" > /dev/null
 # Every phase, with JFR's default settings, to find stalls and their time.
 jcmd "$GAME_PID" JFR.start name=whole settings=default filename="$PWD/worldgen-whole.jfr" > /dev/null
 IFS='|' read -r -a phase_list <<< "$PHASES"
@@ -162,6 +164,9 @@ fi
 
 echo "=== server log: ticks running behind ==="
 tail -n +"$((measured_from + 1))" "$LOG" | grep -E "Can't keep up|ticks behind" | tail -20 | tee -a "$REPORT" || true
+
+echo "=== slow ticks while exploring (tick watchdog) ===" | tee -a "$REPORT"
+tail -n +"$((measured_from + 1))" "$LOG" | grep -F "[slow-tick]" | cut -c1-2500 | head -20 | tee -a "$REPORT" || true
 
 echo "=== worldgen report ==="
 cat "$REPORT" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
