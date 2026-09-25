@@ -79,7 +79,9 @@
 		"ImprovedNoiseMathMixin",
 		"PerlinWrapMixin",
 		"NoiseChunkStateInvoker",
-		"NoiseGeneratorFluidAccessor"
+		"NoiseGeneratorFluidAccessor",
+		"SurfaceSequencePruneMixin",
+		"SurfaceSequenceCheckMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

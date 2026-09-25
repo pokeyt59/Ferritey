@@ -138,6 +138,10 @@ public final class FerriteCommand {
 									return setNoiseMath(ctx, null);
 								}))
 								.then(Commands.literal("status").executes(ctx -> setNoiseMath(ctx, null))))
+						.then(Commands.literal("surface-prune")
+								.then(Commands.literal("on").executes(ctx -> setSurfacePrune(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setSurfacePrune(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setSurfacePrune(ctx, null))))
 						.then(Commands.literal("lazy-interp")
 								.then(Commands.literal("on").executes(ctx -> setLazyInterp(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setLazyInterp(ctx, false)))
@@ -274,6 +278,16 @@ public final class FerriteCommand {
 																	StringArgumentType.getString(ctx, "switch")), false);
 															return Command.SINGLE_SUCCESS;
 														})))))
+						.then(Commands.literal("surface")
+								.then(Commands.argument("chunks", IntegerArgumentType.integer(1, 10000))
+										.then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
+												.executes(ctx -> {
+													sendFeedback(ctx, me.apika.apikaprobe.worldgen.SurfaceBench.run(
+															ctx.getSource().getLevel(),
+															IntegerArgumentType.getInteger(ctx, "chunks"),
+															IntegerArgumentType.getInteger(ctx, "rounds")), false);
+													return Command.SINGLE_SUCCESS;
+												}))))
 						.then(Commands.literal("noise")
 								.then(Commands.argument("chunks", IntegerArgumentType.integer(1, 10000))
 										.then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
@@ -2145,6 +2159,16 @@ public final class FerriteCommand {
 			me.apika.apikaprobe.worldgen.NoiseMath.ENABLED = on;
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.NoiseMath.status(), on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/** /ferrite worldgen surface-prune on|off|status: SurfaceRulePrune, for A/B. */
+	private static int setSurfacePrune(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.worldgen.SurfaceRulePrune.ENABLED = on;
+		}
+		sendFeedback(ctx, me.apika.apikaprobe.worldgen.SurfaceRulePrune.status(), on != null);
 		return Command.SINGLE_SUCCESS;
 	}
 

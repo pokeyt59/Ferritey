@@ -105,6 +105,8 @@ rcon "ferrite bench columns 100 6 noise-math" "ferrite bench columns 100 6 lazy-
 # The noise stage of whole chunks with each noise switch on and off.
 rcon "ferrite bench noise 24 6 lazy-interp" "ferrite bench noise 24 6 noise-math" \
 	"ferrite bench noise 24 6 map-memo" | tee -a "$REPORT"
+# The surface step of whole chunks with surface rule pruning on and off.
+rcon "ferrite bench surface 24 8" "ferrite worldgen surface-prune status" | tee -a "$REPORT"
 
 # Setup (the pen's forceload) stalls the server by design; only later
 # "Can't keep up" warnings are reported.
@@ -120,9 +122,10 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
 MEMO="ferrite worldgen map-memo"
-# Shipped defaults throughout. A setup may hold several commands split by
-# ';' for A/B phases.
-PHASES=${WG_PHASES:-"warmup=|run-1=|run-2=|run-3=|run-4=|run-5=|run-6="}
+# Rotated A/B of surface rule pruning. A setup may hold several commands
+# split by ';'.
+SP="ferrite worldgen surface-prune"
+PHASES=${WG_PHASES:-"warmup=|sp-on-1=$SP on|sp-off-1=$SP off|sp-off-2=|sp-on-2=$SP on|sp-on-3=|sp-off-3=$SP off"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -158,7 +161,7 @@ for spec in "${phase_list[@]}"; do
 	fi
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
 		"ferrite worldgen lazy-interp status" \
-		"ferrite worldgen noise-math status" \
+		"ferrite worldgen noise-math status" "ferrite worldgen surface-prune status" \
 		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
