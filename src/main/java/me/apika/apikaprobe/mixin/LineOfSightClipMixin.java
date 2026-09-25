@@ -24,7 +24,11 @@ import net.minecraft.world.phys.BlockHitResult;
 public abstract class LineOfSightClipMixin {
 
 	@WrapOperation(
-			method = "hasLineOfSight",
+			// The overload that clips; a bare name would select only the
+			// first hasLineOfSight, which just delegates here.
+			method = "hasLineOfSight(Lnet/minecraft/world/entity/Entity;"
+					+ "Lnet/minecraft/world/level/ClipContext$Block;"
+					+ "Lnet/minecraft/world/level/ClipContext$Fluid;D)Z",
 			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;clip"
 					+ "(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;"),
 			require = 0)
