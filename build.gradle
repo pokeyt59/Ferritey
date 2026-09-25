@@ -146,6 +146,11 @@ loom {
 			if (project.hasProperty("ferrite.diagnostics")) {
 				vmArg "-Dferrite.diagnostics=${project.property('ferrite.diagnostics')}"
 			}
+			// -Pferrite.extraJvmArgs="-Da=b -XX:..." appends raw JVM args (CI bench).
+			def extraJvmArgs = project.findProperty("ferrite.extraJvmArgs")?.toString()
+			if (extraJvmArgs) {
+				extraJvmArgs.trim().split(/\s+/).each { vmArg it }
+			}
 		}
 	}
 }
