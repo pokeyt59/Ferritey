@@ -3,8 +3,8 @@
 #
 # Boots the dev server (Lithium dropped into run/mods by the workflow),
 # builds a scene over RCON, then measures /tick query in interleaved arms:
-#   pen:  400 husks spread over a 28x28 pen (AI, pathing, movement)
-#   pile: 150 husks in a 2x2 cell with cramming damage off (push pairs)
+#   pen:  800 husks spread over a 28x28 pen (AI, pathing, movement)
+#   pile: 200 husks in a 2x2 cell with cramming damage off (push pairs)
 #   town: 60 villagers in a closed pen (brains, POI lookups)
 #   boat: one parked boat, as on any real server (a hard collider in the level)
 # Arms come from BENCH_ARMS: "name=cmd;cmd|name2=cmd" (empty cmd list is
@@ -76,14 +76,14 @@ rcon "fill -31 150 -31 -1 150 -1 minecraft:stone" \
 	"fill 3 151 -31 31 155 -3 minecraft:glass hollow" | sort | uniq -c
 
 pen=()
-for _ in $(seq 400); do
+for _ in $(seq 800); do
 	x=$(( -29 + RANDOM % 27 ))
 	z=$(( -29 + RANDOM % 27 ))
 	pen+=("summon minecraft:husk $x.5 152 $z.5 {PersistenceRequired:1b}")
 done
 rcon "${pen[@]}" | sort | uniq -c
 pile=()
-for _ in $(seq 150); do
+for _ in $(seq 200); do
 	pile+=("summon minecraft:husk 6.0 152 6.0 {PersistenceRequired:1b}")
 done
 rcon "${pile[@]}" | sort | uniq -c
@@ -123,7 +123,11 @@ run_arm() {
 	fi
 	sleep 10
 	if [ "$jfr_started" = 0 ]; then
-		jcmd "$GAME_PID" JFR.start name=bench settings=profile \
+		# profile.jfc with Java execution sampling forced to 2 ms.
+		sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(period|throttle)"([^>]*)>[^<]*</setting>#<setting name="\1"\2>2 ms</setting>#' \
+			"$JAVA_HOME/lib/jfr/profile.jfc" > bench.jfc
+		grep -A4 '<event name="jdk.ExecutionSample">' bench.jfc || true
+		jcmd "$GAME_PID" JFR.start name=bench settings="$PWD/bench.jfc" \
 			duration=$((SAMPLES * 5))s filename="$PWD/bench.jfr" > /dev/null
 		jfr_started=1
 		echo "JFR recording arm $name"
@@ -153,12 +157,14 @@ wait "$PID" || true
 if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Critical injection failure|MixinApplyError' "$LOG"; then
 	fail "mixin errors in the server log"
 fi
-grep '\[entity-query-cache\]\|\[collider-skip\]' "$LOG" | tail -6 || true
+grep -v 'Rcon:' "$LOG" | grep '\[entity-query-cache\] scanned\|\[collider-skip\] eligible' | tail -8 || true
 if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH' "$LOG"; then
 	grep 'MISMATCH' "$LOG" | head -5
 	fail "entity query oracle mismatches"
 fi
 
+echo "=== /tick query samples ==="
+cat "$REPORT"
 echo "=== mspt per arm (mean of ${SAMPLES}x2 /tick query samples) ==="
 for spec in "${ARMS[@]}"; do
 	name=${spec%%=*}
@@ -166,5 +172,6 @@ for spec in "${ARMS[@]}"; do
 done | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
 if [ -f bench.jfr ]; then
+	jfr summary bench.jfr | head -40
 	java scripts/JfrHot.java bench.jfr | tee bench-hot.txt
 fi

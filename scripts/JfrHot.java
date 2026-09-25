@@ -26,12 +26,14 @@ public class JfrHot {
 		Map<String, Integer> self = new HashMap<>();
 		Map<String, Integer> incl = new HashMap<>();
 		Map<String, Map<String, Integer>> chains = new HashMap<>();
+		Map<String, Integer> perThread = new HashMap<>();
 		int total = 0;
 		try (RecordingFile file = new RecordingFile(Path.of(args[0]))) {
 			while (file.hasMoreEvents()) {
 				RecordedEvent event = file.readEvent();
 				if (!"jdk.ExecutionSample".equals(event.getEventType().getName())) continue;
 				RecordedThread thread = event.getThread("sampledThread");
+				perThread.merge(thread == null ? "?" : String.valueOf(thread.getJavaName()), 1, Integer::sum);
 				if (thread == null || !THREAD.equals(thread.getJavaName())) continue;
 				RecordedStackTrace stack = event.getStackTrace();
 				if (stack == null || stack.getFrames().isEmpty()) continue;
@@ -50,6 +52,10 @@ public class JfrHot {
 				}
 				chains.computeIfAbsent(top, k -> new HashMap<>()).merge(chain.toString(), 1, Integer::sum);
 			}
+		}
+		System.out.println("execution samples per thread (top 8):");
+		for (Map.Entry<String, Integer> e : sorted(perThread).subList(0, Math.min(8, perThread.size()))) {
+			System.out.printf("  %6d  %s%n", e.getValue(), e.getKey());
 		}
 		System.out.println("server thread samples: " + total);
 		if (total == 0) return;
