@@ -41,7 +41,7 @@ grep '^@sig ' scripts/inspect-targets.txt | while read -r _ jre ere mre; do
 		[[ "$(basename "$j")" =~ $jre ]] || continue
 		unzip -Z1 "$j" | grep -E "$ere" | while read -r entry; do
 			hits=$(javap -p -classpath "$j" "${entry%.class}" 2>/dev/null | grep -E "$mre" || true)
-			[ -n "$hits" ] && printf '#sig %s\n%s\n' "${entry%.class}" "$hits"
+			if [ -n "$hits" ]; then printf '#sig %s\n%s\n' "${entry%.class}" "$hits"; fi
 		done
 	done
 done
