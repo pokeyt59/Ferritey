@@ -238,7 +238,7 @@ jobs:
         run: |
           if [ -n "$BENCH_ARMS_INPUT" ]; then export BENCH_ARMS="$BENCH_ARMS_INPUT"; fi
           scripts/ci-bench.sh -Pferrite.diagnostics=false \
-            "-Pferrite.extraJvmArgs=-XX:FlightRecorderOptions=stackdepth=256"
+            "-Pferrite.extraJvmArgs=-XX:FlightRecorderOptions=stackdepth=256 -Dferrite.log.monitors.on=true"
       - name: upload bench results
         if: always()
         uses: actions/upload-artifact@v4

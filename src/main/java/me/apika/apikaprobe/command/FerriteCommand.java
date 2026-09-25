@@ -266,6 +266,11 @@ public final class FerriteCommand {
 								.then(Commands.literal("off").executes(FerriteCommand::stageProbeOff))
 								.then(Commands.literal("report").executes(FerriteCommand::stageProbeReport))
 								.then(Commands.literal("reset").executes(FerriteCommand::stageProbeReset))))
+				.then(Commands.literal("entityquery")
+						.then(Commands.literal("typed-grid")
+								.then(Commands.literal("on").executes(ctx -> setTypedGrid(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setTypedGrid(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setTypedGrid(ctx, null)))))
 				.then(Commands.literal("prechunk")
 						.then(Commands.literal("on").executes(ctx -> setPrechunk(ctx, true)))
 						.then(Commands.literal("off").executes(ctx -> setPrechunk(ctx, false)))
@@ -1888,6 +1893,23 @@ public final class FerriteCommand {
 				muted.isEmpty() ? "(none)" : String.join(", ", muted));
 		sendFeedback(ctx, msg, false);
 		ExampleMod.LOGGER.info(msg);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/**
+	 * /ferrite entityquery typed-grid on|off|status: whether typed entity
+	 * queries on big class buckets walk the section grid. Session only;
+	 * -Dferrite.entityquery.typedgrid=false sets the boot default.
+	 */
+	private static int setTypedGrid(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.spatial.EntityCellIndex.TYPED_GRID = on;
+		}
+		String msg = String.format("[entity-query-cache] typed-grid=%s (index %s)",
+				me.apika.apikaprobe.spatial.EntityCellIndex.TYPED_GRID ? "on" : "off",
+				me.apika.apikaprobe.spatial.EntityCellIndex.ENABLED ? "on" : "off");
+		sendFeedback(ctx, msg, on != null);
 		return Command.SINGLE_SUCCESS;
 	}
 

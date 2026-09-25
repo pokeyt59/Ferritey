@@ -23,6 +23,14 @@ public final class EntityCellIndex {
 	/** Master switch: default on since 0.7.2; kill with -Dferrite.entityquery.cache=false. */
 	public static final boolean ENABLED = !"false".equals(System.getProperty("ferrite.entityquery.cache"));
 
+	/**
+	 * Typed queries (getEntitiesOfClass and friends) on a big class bucket
+	 * walk the section grid instead of the whole bucket. Kill switch
+	 * -Dferrite.entityquery.typedgrid=false; /ferrite entityquery typed-grid
+	 * toggles it for A/B.
+	 */
+	public static volatile boolean TYPED_GRID = !"false".equals(System.getProperty("ferrite.entityquery.typedgrid"));
+
 	/** Oracle: sample 1 in N filtered queries; 0 disables. Default 16 while alpha. */
 	public static final int ORACLE_RATE = Integer.getInteger("ferrite.entityquery.oracle", 16);
 
@@ -35,4 +43,5 @@ public final class EntityCellIndex {
 	public static int queryCounter;
 	public static long typedQueries;
 	public static long typedScanned;
+	public static long typedGridQueries;
 }

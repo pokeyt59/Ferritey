@@ -16,7 +16,7 @@ REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
 SAMPLES=${BENCH_SAMPLES:-8}
-BENCH_ARMS=${BENCH_ARMS:-"ferrite=ferrite cramming on|cramming-off=ferrite cramming off"}
+BENCH_ARMS=${BENCH_ARMS:-"typed-grid=ferrite entityquery typed-grid on|typed-linear=ferrite entityquery typed-grid off"}
 
 mkdir -p run
 echo "eula=true" > run/eula.txt
@@ -150,6 +150,11 @@ wait "$PID" || true
 
 if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Critical injection failure|MixinApplyError' "$LOG"; then
 	fail "mixin errors in the server log"
+fi
+grep '\[entity-query-cache\]' "$LOG" | tail -4 || true
+if grep -q 'GRID MISMATCH\|filter skipped intersecting' "$LOG"; then
+	grep 'MISMATCH' "$LOG" | head -5
+	fail "entity query oracle mismatches"
 fi
 
 echo "=== mspt per arm (mean of ${SAMPLES}x2 /tick query samples) ==="

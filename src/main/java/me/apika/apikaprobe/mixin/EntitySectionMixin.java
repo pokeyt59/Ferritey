@@ -45,6 +45,9 @@ public abstract class EntitySectionMixin implements SectionExtents {
 	/** Sections at or above this many entities get a bitset grid. */
 	@Unique private static final int GRID_MIN = 32;
 
+	/** Typed queries walk the grid once their class bucket is this big. */
+	@Unique private static final int TYPED_GRID_MIN = 16;
+
 	@Override
 	public void ferrite$setOrigin(int x, int y, int z) {
 		ferrite$originX = x;
@@ -127,34 +130,40 @@ public abstract class EntitySectionMixin implements SectionExtents {
 			CallbackInfoReturnable<AbortableIterationConsumer.Continuation> cir) {
 		if (!EntityCellIndex.ENABLED) return;
 		java.util.List<EntityAccess> list = ferrite$list();
-		if (ferrite$grid == null && list.size() >= GRID_MIN) {
-			ferrite$grid = new me.apika.apikaprobe.spatial.SectionGrid(
-					list.size() + 64, ferrite$originX, ferrite$originY, ferrite$originZ);
-			ferrite$grid.rebuild(list);
-		}
-		if (ferrite$grid != null) {
-			if (ferrite$grid.dirty()) {
-				if (list.size() < GRID_MIN / 2) {
-					ferrite$grid = null;
-					cir.setReturnValue(ferrite$run(storage, null, bb, consumer));
-					return;
-				}
-				if (list.size() > ferrite$grid.capacity()) {
-					// Section outgrew the bitset; reallocate before rebuild.
-					ferrite$grid = new me.apika.apikaprobe.spatial.SectionGrid(
-							list.size() + 64, ferrite$originX, ferrite$originY, ferrite$originZ);
-				}
-				ferrite$grid.rebuild(list);
-			}
-			if (ferrite$grid.dirty()) {
-				// Still dirty after rebuild: never trust a dirty grid.
-				cir.setReturnValue(ferrite$run(storage, null, bb, consumer));
-				return;
-			}
+		me.apika.apikaprobe.spatial.SectionGrid grid = ferrite$readyGrid(list);
+		if (grid != null) {
 			cir.setReturnValue(ferrite$gridRun(list, bb, consumer));
 			return;
 		}
 		cir.setReturnValue(ferrite$run(storage, null, bb, consumer));
+	}
+
+	/**
+	 * Builds, refreshes or drops this section's grid. Returns null when the
+	 * section should be walked linearly: too few entities, or a grid that
+	 * is still dirty after a rebuild (a dirty grid is never trusted).
+	 */
+	@Unique
+	private me.apika.apikaprobe.spatial.SectionGrid ferrite$readyGrid(java.util.List<EntityAccess> list) {
+		if (ferrite$grid == null) {
+			if (list.size() < GRID_MIN) return null;
+			ferrite$grid = new me.apika.apikaprobe.spatial.SectionGrid(
+					list.size() + 64, ferrite$originX, ferrite$originY, ferrite$originZ);
+			ferrite$grid.rebuild(list);
+		}
+		if (ferrite$grid.dirty()) {
+			if (list.size() < GRID_MIN / 2) {
+				ferrite$grid = null;
+				return null;
+			}
+			if (list.size() > ferrite$grid.capacity()) {
+				// Section outgrew the bitset; reallocate before rebuild.
+				ferrite$grid = new me.apika.apikaprobe.spatial.SectionGrid(
+						list.size() + 64, ferrite$originX, ferrite$originY, ferrite$originZ);
+			}
+			ferrite$grid.rebuild(list);
+		}
+		return ferrite$grid.dirty() ? null : ferrite$grid;
 	}
 
 	/** Grid-backed plain query: visit only candidate indices, vanilla order. */
@@ -229,8 +238,89 @@ public abstract class EntitySectionMixin implements SectionExtents {
 			cir.setReturnValue(AbortableIterationConsumer.Continuation.CONTINUE);
 			return;
 		}
+		if (EntityCellIndex.TYPED_GRID && found.size() >= TYPED_GRID_MIN) {
+			java.util.List<EntityAccess> list = ferrite$list();
+			me.apika.apikaprobe.spatial.SectionGrid grid = ferrite$readyGrid(list);
+			if (grid != null) {
+				EntityCellIndex.typedGridQueries++;
+				cir.setReturnValue(ferrite$typedGridRun(list, found, type, bb, consumer));
+				return;
+			}
+		}
 		EntityCellIndex.typedScanned += found.size();
 		cir.setReturnValue(ferrite$run(found, type, bb, consumer));
+	}
+
+	/**
+	 * Grid-backed typed query. The grid indexes the section's full list;
+	 * each class bucket holds the same entities in the same relative
+	 * order (ClassInstanceMultiMap appends to every matching bucket and
+	 * builds new buckets by filtering the full list), so visiting grid
+	 * candidates in ascending index order and keeping instances of the
+	 * base class reproduces vanilla's walk over the bucket.
+	 */
+	@SuppressWarnings({"unchecked", "rawtypes"})
+	@Unique
+	private AbortableIterationConsumer.Continuation ferrite$typedGridRun(java.util.List<EntityAccess> list,
+			Collection<? extends EntityAccess> found, EntityTypeTest type, AABB bb,
+			AbortableIterationConsumer consumer) {
+		Class<?> base = type.getBaseClass();
+		boolean oracle = EntityCellIndex.ORACLE_RATE > 0
+				&& ++EntityCellIndex.queryCounter % EntityCellIndex.ORACLE_RATE == 0;
+		int minX = Mth.floor(bb.minX - ferrite$maxHalfXZ) - 1 - ferrite$originX;
+		int maxX = Mth.floor(bb.maxX + ferrite$maxHalfXZ) + 1 - ferrite$originX;
+		int minZ = Mth.floor(bb.minZ - ferrite$maxHalfXZ) - 1 - ferrite$originZ;
+		int maxZ = Mth.floor(bb.maxZ + ferrite$maxHalfXZ) + 1 - ferrite$originZ;
+		int minY = Mth.floor(bb.minY - ferrite$maxHeight) - 1 - ferrite$originY;
+		int maxY = Mth.floor(bb.maxY) + 1 - ferrite$originY;
+
+		if (oracle) {
+			java.util.ArrayList<Object> actual = new java.util.ArrayList<>();
+			ferrite$grid.query(minX, minY, minZ, maxX, maxY, maxZ, idx -> {
+				EntityAccess e = list.get(idx);
+				if (base.isInstance(e)) {
+					Object cast = type.tryCast(e);
+					if (cast != null && e.getBoundingBox().intersects(bb)) actual.add(cast);
+				}
+				return true;
+			});
+			java.util.ArrayList<Object> expected = new java.util.ArrayList<>();
+			for (EntityAccess e : found) {
+				Object cast = type.tryCast(e);
+				if (cast != null && e.getBoundingBox().intersects(bb)) expected.add(cast);
+			}
+			EntityCellIndex.oracleChecks++;
+			if (!expected.equals(actual)) {
+				EntityCellIndex.oracleMismatches++;
+				if (EntityCellIndex.oracleMismatches <= 8) {
+					ExampleMod.LOGGER.warn(
+							"[entity-query-cache] TYPED GRID MISMATCH: expected {} actual {} type={} box={}",
+							expected.size(), actual.size(), base.getSimpleName(), bb);
+				}
+			}
+			for (Object e : expected) {
+				EntityCellIndex.delivered++;
+				if (consumer.accept(e).shouldAbort()) {
+					return AbortableIterationConsumer.Continuation.ABORT;
+				}
+			}
+			return AbortableIterationConsumer.Continuation.CONTINUE;
+		}
+
+		boolean completed = ferrite$grid.query(minX, minY, minZ, maxX, maxY, maxZ, idx -> {
+			EntityAccess e = list.get(idx);
+			EntityCellIndex.typedScanned++;
+			if (!base.isInstance(e)) return true;
+			Object cast = type.tryCast(e);
+			if (cast != null && e.getBoundingBox().intersects(bb)) {
+				EntityCellIndex.delivered++;
+				return !consumer.accept(cast).shouldAbort();
+			}
+			return true;
+		});
+		return completed
+				? AbortableIterationConsumer.Continuation.CONTINUE
+				: AbortableIterationConsumer.Continuation.ABORT;
 	}
 
 	/**
