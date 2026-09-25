@@ -174,8 +174,6 @@ if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMAT
 	grep 'MISMATCH' "$LOG" | head -5
 	fail "oracle mismatches"
 fi
-# The air-skip mixin is require = 0; make sure it applied and ran.
-echo "$airskip" | grep -q 'rays=[1-9]' || fail "raycast air-skip never ran"
 
 echo "=== /tick query samples ==="
 cat "$REPORT"
@@ -189,3 +187,7 @@ if [ -f bench.jfr ]; then
 	jfr summary bench.jfr | head -40
 	java scripts/JfrHot.java bench.jfr | tee bench-hot.txt
 fi
+
+# Last, so the numbers above always print: the air-skip mixin is
+# require = 0, so make sure it applied and ran.
+echo "$airskip" | grep -q 'rays=[1-9]' || { echo "::error::raycast air-skip never ran"; exit 1; }
