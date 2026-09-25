@@ -1,3 +1,7 @@
 # One target per line: <fully.qualified.Class> <method-name-regex>
 # The CI inspect job prints javap -c -p for each matching method.
-net.minecraft.world.entity.ai.Brain [A-Za-z0-9_$<>]+
+# "@list <jar-name-regex> <entry-regex>" prints matching entries of matching jars.
+@list fabric-content-registries (Path|path).*\.class
+net.fabricmc.fabric.api.registry.LandPathTypeRegistry [A-Za-z0-9_$<>]+
+net.minecraft.world.level.pathfinder.PathfindingContext [A-Za-z0-9_$<>]+
+net.minecraft.world.level.pathfinder.PathTypeCache [A-Za-z0-9_$<>]+

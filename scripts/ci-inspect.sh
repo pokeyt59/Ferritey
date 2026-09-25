@@ -11,9 +11,25 @@ set -euo pipefail
 	grep -E 'error:|warning:' -A3 inspect-gradle.log | head -60 || tail -50 inspect-gradle.log
 }
 mapfile -t jars < <(find "$HOME/.gradle/caches" .gradle -name '*.jar' 2>/dev/null | grep -i 'minecraft' | grep -v -- '-sources' || true)
+# Every other jar (Fabric API modules and the like), searched after the game.
+mapfile -t more < <(find "$HOME/.gradle/caches" .gradle -name '*.jar' 2>/dev/null | grep -vi 'minecraft' | grep -v -- '-sources' || true)
+jars+=("${more[@]}")
 echo "candidate jars: ${#jars[@]}"
 
-grep -v '^#' scripts/inspect-targets.txt | while read -r cls methods; do
+# "@list <jar-name-regex> <entry-regex>" lines print javap -c -p of every
+# matching class in every matching jar.
+grep '^@list ' scripts/inspect-targets.txt | while read -r _ jre ere; do
+	for j in "${jars[@]}"; do
+		[[ "$(basename "$j")" =~ $jre ]] || continue
+		unzip -Z1 "$j" | grep -E "$ere" | while read -r entry; do
+			echo
+			echo "######## $entry  ($j)"
+			javap -c -p -classpath "$j" "${entry%.class}" || true
+		done
+	done
+done
+
+grep -v '^#\|^@' scripts/inspect-targets.txt | while read -r cls methods; do
 	[ -n "$cls" ] || continue
 	entry="${cls//.//}.class"
 	jar=""
