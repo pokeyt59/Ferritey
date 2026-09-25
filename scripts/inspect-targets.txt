@@ -36,3 +36,6 @@ net.minecraft.world.level.levelgen.SurfaceRules$BiomeConditionSource$1BiomeCondi
 net.minecraft.world.level.levelgen.SurfaceRules$LazyCondition [A-Za-z0-9_$<>]+
 net.minecraft.world.level.levelgen.SurfaceRules$LazyYCondition [A-Za-z0-9_$<>]+
 net.minecraft.world.level.levelgen.SurfaceRules$Context updateXZ|updateY|<init>
+@sig minecraft-extracted_server net/minecraft/world/level/(levelgen/NoiseBasedChunkGenerator|chunk/ChunkGenerator|chunk/ProtoChunk|chunk/status/ChunkStatusTasks|chunk/status/WorldGenContext|chunk/status/ChunkStep|StructureManager|levelgen/blending/Blender)\.class .
+@sig minecraft-extracted_server net/minecraft/server/level/WorldGenRegion\.class <init>|class
+net.minecraft.world.level.chunk.status.ChunkStatusTasks generateBiomes|generateNoise|generateSurface
