@@ -1941,8 +1941,8 @@ public final class FerriteCommand {
 	}
 
 	/**
-	 * /ferrite raycast air-skip on|off|status: whether clip answers air
-	 * blocks itself instead of running vanilla's per-block shape clip.
+	 * /ferrite raycast air-skip on|off|status: whether line-of-sight rays
+	 * answer air blocks without the per-block shape clip.
 	 * Session only; -Dferrite.clip.airskip=false sets the boot default.
 	 */
 	private static int setClipAirSkip(
@@ -1951,13 +1951,13 @@ public final class FerriteCommand {
 			me.apika.apikaprobe.spatial.ClipAirSkip.ENABLED = on;
 		}
 		String msg = String.format(
-				"[clip-airskip] air-skip=%s rays=%d skipped=%d passed=%d oracleChecks=%d oracleHits=%d",
+				"[clip-airskip] air-skip=%s rays=%d skipped=%d passed=%d oracleChecks=%d oracleMismatches=%d",
 				me.apika.apikaprobe.spatial.ClipAirSkip.ENABLED ? "on" : "off",
 				me.apika.apikaprobe.spatial.ClipAirSkip.rays,
 				me.apika.apikaprobe.spatial.ClipAirSkip.skipped,
 				me.apika.apikaprobe.spatial.ClipAirSkip.passed,
 				me.apika.apikaprobe.spatial.ClipAirSkip.oracleChecks,
-				me.apika.apikaprobe.spatial.ClipAirSkip.oracleHits);
+				me.apika.apikaprobe.spatial.ClipAirSkip.oracleMismatches);
 		sendFeedback(ctx, msg, on != null);
 		return Command.SINGLE_SUCCESS;
 	}

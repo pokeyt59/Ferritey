@@ -34,7 +34,7 @@
 		"ClassInstanceMultiMapAccessor",
 		"EntityCellMixin",
 		"EntityGetterMixin",
-		"BlockGetterClipMixin",
+		"LineOfSightClipMixin",
 		"EntitySectionCallbackMixin",
 		"EntitySectionMixin",
 		"EntitySectionStorageMixin",

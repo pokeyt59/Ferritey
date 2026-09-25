@@ -1,7 +1,5 @@
 # One target per line: <fully.qualified.Class> <method-name-regex>
 # The CI inspect job prints javap -c -p for each matching method.
-net.minecraft.world.level.BlockGetter clip|traverseBlocks|lambda.clip.[0-9]+
-net.minecraft.world.level.ClipContext getBlockShape|getFluidShape|<init>
-net.minecraft.world.level.Level isDebug|getBlockState|getFluidState
-net.minecraft.server.level.ServerChunkCache getChunkNow
 net.minecraft.world.entity.LivingEntity isPushable|onClimbable|pushEntities
+net.minecraft.world.entity.LivingEntity hasLineOfSight
+net.minecraft.world.phys.BlockHitResult isInside|getBlockPos|getDirection|miss
