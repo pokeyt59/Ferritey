@@ -105,6 +105,8 @@ All Ferrite toggles live under `/ferrite`. Default state is in the rightmost col
 | Command | Effect | Default |
 |---|---|---|
 | `/ferrite cramming on\|off\|status` | Rust spatial-hash mob-vs-mob cramming. Vanilla parity, A/B switchable. | **on** |
+| `/ferrite raycast air-skip on\|off\|status` | Mob line-of-sight rays answer air blocks without building their shapes; every other block, the walk and the miss result stay vanilla's. A sampled oracle compares rays with the original clip (Lithium's, when installed). Session only; `-Dferrite.clip.airskip=false` turns it off at boot. | **on** |
+| `/ferrite entityquery index\|typed-grid\|collider-sections on\|off\|status` | Session A/B switches for the entity query index, its grid for typed queries, and the per-section collider skip. `-Dferrite.entityquery.cache=false` removes the index at boot. | **on** |
 | `/ferrite prechunk on\|off\|status` | Movement-predictive chunk tickets ahead of moving players. Never showed a measurable TPS gain and loads chunks up to 16 past view distance, so it is off; `-Dferrite.prechunk=true` turns it on at boot. | off |
 | `/ferrite diagnostics on\|off\|auto\|status` | Whether the timing-only mixins behind the periodic monitor reports load. `auto` means lean (skipped) when spark is installed. Applied on restart; `-Dferrite.diagnostics=true\|false` overrides. | auto |
 | `/ferrite redstone ac on\|off\|status` | Alternate Current wire algorithm (~15x fewer cascades). Turn on for performance; turn off if a contraption relies on quasi-connectivity, 0-tick pulses, or instawire. | off |
@@ -146,6 +148,7 @@ Full reference:
 
 - **Diagnostic gating.** `CacheRouteCaptureMixin` and `AquiferMonitor` are gated off by default, removing ~8-10 ms/chunk of instrumentation overhead the early profiling sessions used.
 - **Lean mode with spark.** spark already profiles the server, so when it is installed Ferrite leaves out about thirty timing-only mixins (entity tick, AI goals, movement, tick phases, light, redstone, chunk-gen probes) and starts with monitor reports off. The `[hw]` boot line says `diagnostics=lean` or `full`.
+- **Cramming asks `isPushable()` only of overlapping mobs.** The check costs a block lookup; the batch now asks it of about 4 in 10 mobs in the CI bench scene instead of all of them, with the same results.
 - **Lazy worldgen state.** The Rust copy of the world's noises, biomes and density functions is built the first time a worldgen command needs it, not at every boot, since nothing on by default reads it.
 
 This runs for everyone with no opt-in required, because it purely reduces overhead in a code path that runs regardless of other Ferrite settings.
