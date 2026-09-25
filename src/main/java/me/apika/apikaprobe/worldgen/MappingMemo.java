@@ -86,6 +86,38 @@ public final class MappingMemo {
 		return again;
 	}
 
+	/**
+	 * The visitor NoiseChunk hands mapAll: the NoiseChunk's own visitor,
+	 * carrying the memo for the recursion to find.
+	 */
+	public static final class Visitor implements DensityFunction.Visitor {
+		private final DensityFunction.Visitor delegate;
+		private final MappingMemo memo;
+
+		public Visitor(DensityFunction.Visitor delegate) {
+			this.delegate = delegate;
+			this.memo = new MappingMemo();
+		}
+
+		public DensityFunction.Visitor delegate() {
+			return delegate;
+		}
+
+		public MappingMemo memo() {
+			return memo;
+		}
+
+		@Override
+		public DensityFunction apply(DensityFunction function) {
+			return delegate.apply(function);
+		}
+
+		@Override
+		public DensityFunction.NoiseHolder visitNoise(DensityFunction.NoiseHolder noise) {
+			return delegate.visitNoise(noise);
+		}
+	}
+
 	public static String status() {
 		return String.format("[map-memo] map-memo=%s noiseChunks=%d repeatsSkipped>=%d oracleChecks=%d oracleMismatches=%d",
 				ENABLED ? "on" : "off", CREATED.get(), repeats.sum(), oracleChecks.sum(), oracleMismatches.sum());

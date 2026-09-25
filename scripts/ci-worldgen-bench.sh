@@ -94,6 +94,12 @@ rcon "${pen[@]}" | sort | uniq -c
 echo "warming up"
 sleep 45
 
+# Height queries (a whole NoiseChunk per column) with MappingMemo on and
+# off, on the server thread, which they stall meanwhile: before the
+# measured window.
+echo "=== height queries ===" | tee -a "$REPORT"
+rcon "ferrite bench columns 100 6" | tee -a "$REPORT"
+
 # Setup (the pen's forceload) stalls the server by design; only later
 # "Can't keep up" warnings are reported.
 measured_from=$(wc -l < "$LOG")
@@ -107,7 +113,8 @@ python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee
 # is a server command. The first phase is recorded with JFR.
 ISO="ferrite worldgen isolate-server-core"
 # The first phase warms up the JIT on worldgen code and is not an arm.
-PHASES=${WG_PHASES:-"warmup=$ISO off|isolated=$ISO on|default=$ISO off|default=$ISO off|isolated=$ISO on|isolated=$ISO on|default=$ISO off"}
+MEMO="ferrite worldgen map-memo"
+PHASES=${WG_PHASES:-"warmup=$MEMO on|memo-on=$MEMO on|memo-off=$MEMO off|memo-off=$MEMO off|memo-on=$MEMO on|memo-on=$MEMO on|memo-off=$MEMO off"}
 GAME_PID=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
 [ -n "$GAME_PID" ] || fail "game JVM not found"
 # profile.jfc with Java execution sampling at 5 ms, every thread.
@@ -135,7 +142,7 @@ for spec in "${phase_list[@]}"; do
 		kill "$pinner"; wait "$pinner" 2>/dev/null || true
 		python3 scripts/pin-threads.py "$GAME_PID" reset "$CPUS"
 	fi
-	rcon "ferrite worldgen height-cache status" "$ISO status" | sed "s/^/[$label] /" | tee -a "$REPORT"
+	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" | sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done
 
@@ -158,4 +165,5 @@ if [ -f worldgen.jfr ]; then
 	head -c 20000 worldgen-stages.txt | sed -n '1,16p' >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 fi
 [ -z "${explore_failed:-}" ] || { echo "::error::exploring failed"; exit 1; }
-if grep -q 'oracleMismatches=[1-9]' "$REPORT"; then echo "::error::height cache oracle mismatches"; exit 1; fi
+if grep -q 'oracleMismatches=[1-9]' "$REPORT"; then echo "::error::oracle mismatches"; exit 1; fi
+grep -q 'heights differing 0;' "$REPORT" || { echo "::error::height queries differ with the mapping memo"; exit 1; }

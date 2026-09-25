@@ -118,6 +118,10 @@ public final class FerriteCommand {
 								.then(Commands.literal("on").executes(ctx -> setServerCore(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setServerCore(ctx, false)))
 								.then(Commands.literal("status").executes(ctx -> setServerCore(ctx, null))))
+						.then(Commands.literal("map-memo")
+								.then(Commands.literal("on").executes(ctx -> setMapMemo(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setMapMemo(ctx, false)))
+								.then(Commands.literal("status").executes(ctx -> setMapMemo(ctx, null))))
 						.then(Commands.literal("height-cache")
 								.then(Commands.literal("on").executes(ctx -> setHeightCache(ctx, true)))
 								.then(Commands.literal("off").executes(ctx -> setHeightCache(ctx, false)))
@@ -214,6 +218,16 @@ public final class FerriteCommand {
 												.then(Commands.argument("runsPerArm", IntegerArgumentType.integer(1, 10))
 														.executes(FerriteCommand::arrivalSuiteStart))))))
 				.then(Commands.literal("bench")
+						.then(Commands.literal("columns")
+								.then(Commands.argument("queries", IntegerArgumentType.integer(1, 100000))
+										.then(Commands.argument("rounds", IntegerArgumentType.integer(1, 50))
+												.executes(ctx -> {
+													sendFeedback(ctx, me.apika.apikaprobe.worldgen.ColumnBench.run(
+															ctx.getSource().getLevel(),
+															IntegerArgumentType.getInteger(ctx, "queries"),
+															IntegerArgumentType.getInteger(ctx, "rounds")), false);
+													return Command.SINGLE_SUCCESS;
+												}))))
 						.then(Commands.literal("explore")
 								.then(Commands.literal("add")
 										.then(Commands.argument("x1", IntegerArgumentType.integer())
@@ -2038,6 +2052,16 @@ public final class FerriteCommand {
 			}
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.ServerCoreAffinity.status(), on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/** /ferrite worldgen map-memo on|off|status: MappingMemo, for A/B. */
+	private static int setMapMemo(
+			com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, Boolean on) {
+		if (on != null) {
+			me.apika.apikaprobe.worldgen.MappingMemo.ENABLED = on;
+		}
+		sendFeedback(ctx, me.apika.apikaprobe.worldgen.MappingMemo.status(), on != null);
 		return Command.SINGLE_SUCCESS;
 	}
 
