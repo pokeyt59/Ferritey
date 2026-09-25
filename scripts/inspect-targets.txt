@@ -1,6 +1,3 @@
 # One target per line: <fully.qualified.Class> <method-name-regex>
 # The CI inspect job prints javap -c -p for each matching method.
-net.minecraft.world.entity.Entity checkInsideBlocks|lambda.checkInsideBlocks.[0-9]+|getOnPos|getBlockPosBelowThatAffectsMyMovement
-net.minecraft.world.level.BlockGetter forEachBlockIntersectedBetween|lambda.forEachBlockIntersectedBetween.*
-net.minecraft.world.entity.ai.Brain tick|setActiveActivity|setActiveActivityIfPossible|useDefaultActivity|updateActivityFromSchedule|addActivityAndRemoveMemoriesWhenStopped|addActivityWithConditions|getRunningBehaviors|isActive
-net.minecraft.world.entity.LivingEntity tickEffects
+net.minecraft.world.entity.ai.Brain [A-Za-z0-9_$<>]+
