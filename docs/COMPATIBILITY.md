@@ -8,8 +8,9 @@ The structurally safe parts are sound by construction. The unknown
 parts are flagged as test gates so that when a user does run the
 stack under load, we know what to look at.
 
-Last refreshed 2026-05-05 (full code-level audit landed this revision;
-prior revision was desk-level only). Update on each release that
+Last refreshed 2026-09-25 (added the section on overlaps with a
+Lithium + ServerCore + ScalableLux + Biolith + spark server; the
+threading audit below dates from 2026-05-05). Update on each release that
 changes the JNI surface, mixin set, or worldgen bootstrap path.
 
 ## Scope
@@ -57,8 +58,9 @@ deterministic since the world seed is the only input.
 
 ### Worldgen bootstrap
 
-`WorldgenStateBootstrap` runs from a `ServerLevelEvents.LOAD` handler.
-Single-threaded by Fabric's event dispatch. The `BUILDER` mutex is
+`WorldgenStateBootstrap` runs from the overworld `ServerLevelEvents.LOAD`
+handler when an opt-in needs it at boot, otherwise from the first
+`/ferrite` command that reads the state. Both run on the server thread. The `BUILDER` mutex is
 held only during init, register, and finalize, all on that one
 thread.
 
@@ -159,7 +161,8 @@ structural rather than statistical:
 - `PhysicsDispatcher.currentWorld`
 - `PhysicsDispatcher.BUCKETS` (HashMap)
 - `PhysicsHandoff.STATE_TO_PALETTE`, `PALETTE_AABBS` (HashMap, ArrayList)
-- `CrammingDispatcher.MOB_SCRATCH` (ArrayList)
+- `CrammingDispatcher.MOB_SCRATCH` (ArrayList), `CALLER` (boolean[]),
+  and the `lastLevel`/`lastTick` batch key
 
 The bucket cluster is the most fragile: `key != currentlyLoadedBucketKey`
 triggers a Rust-side snapshot rebuild via JNI, then `currentlyLoadedTickId`
@@ -250,23 +253,10 @@ visible only as worldgen artifacts at chunk boundaries.
 
 ### Lithium `mixin.gen.biome_noise_cache` vs `MultiNoiseBiomeSourceRouteMixin`
 
-Both intercept the same biome-source call. Lithium wraps with a
-cache, we redirect to Rust.
-
-**Risk:** route-ordering decides which fires first. If Lithium runs
-before our redirect, the cache holds and Rust is bypassed. If ours
-runs first, the cache is populated by our Rust answer (which is
-fine as long as our answer is bit-exact, which the climate parity
-validator already confirms).
-
-**How to test:** with both mods loaded, run the validator at boot:
-`./gradlew runClient -Pferrite.autovalidate=2000`. If parity stays
-1000+/1000+ on biome lookup, ordering is benign either way. If it
-drops, the order matters and we need explicit priority.
-
-**Soft-degrade behavior:** worst case, our redirect is bypassed and
-biome queries run in vanilla + Lithium. No correctness loss, just
-no Rust acceleration on that path.
+Resolved: `MultiNoiseBiomeSourceRouteMixin` is gone. It named the
+Yarn-era `getBiome(III Climate$MultiNoiseSampler)` with `require = 0`,
+so under Mojmap it never attached and never competed with Lithium. See
+the Biolith note below for why it was not retargeted.
 
 ### Non-overworld bootstrap timing gap
 
@@ -313,9 +303,7 @@ future mod could violate them:
 Until the Tier 3 items are resolved with logs from a real run:
 
 - **Ferrite + Lithium**: low risk. Both are in-process Java mixins
-  on read-mostly paths. The biome-noise-cache overlap is the only
-  flagged item, soft-degrades cleanly. Run the autovalidator with
-  both loaded to confirm parity.
+  on read-mostly paths. See the overlap notes below.
 - **Ferrite + a concurrent-chunkgen mod**: defensible on the
   worldgen read path, unknown on mixin priority and the
   volatile-shadow item, untested on non-overworld bootstrap.
@@ -324,6 +312,40 @@ Until the Tier 3 items are resolved with logs from a real run:
 - **Ferrite + Lithium + a concurrent-chunkgen mod**: the same
   caveats as the previous item. Lithium does not introduce new
   threading concerns on top.
+
+## Overlaps with common server mods
+
+From a source read of each mod's 26.2 branch against Ferrite's hooks.
+
+- **Lithium.** Its `world.block_entity_ticking.sleeping.furnace` already
+  sleeps unlit furnaces with no cooking progress, which covers Ferrite's
+  furnace ticker gate. Ferrite checks whether Lithium's
+  `SleepingBlockEntity` landed on `AbstractFurnaceBlockEntity` and, if so,
+  its furnace gate and the setItem re-arm hook stand down (`LithiumCompat`).
+  The sign gate stays; Lithium does not sleep signs. Lithium's caller
+  rewrites also cut entity-query volume, so the entity index wins less
+  there (JOURNEY, 2026-08-19). Lithium's `block.hopper` rewrite would
+  bypass a hopper-extract consumer anyway; Ferrite's hopper layer is not
+  in the 26.x builds.
+- **ServerCore.** Its activation range skips `Entity.tick` for inactive
+  entities, and dynamic simulation distance widens the band of loaded but
+  frozen chunks. The cramming batch now takes as callers only mobs whose
+  own `pushEntities` ran last tick, so neither pushes nor takes cramming
+  damage from the batch. Its `PathFinder` stream redirects and Ferrite's
+  `findPath` HEAD/RETURN timers coexist.
+- **ScalableLux.** It only wraps `runLightUpdates` inside
+  `ThreadedLevelLightEngine.runUpdate` and `hasLightWork` in
+  `tryScheduleUpdate`, so Ferrite's light timers still attach and measure
+  its engine. Moonrise, which replaces those internals, stays special-cased.
+- **Biolith (and Terralith through it).** Biolith places biomes from a
+  cancellable HEAD inject on `MultiNoiseBiomeSource.getNoiseBiome`. A Rust
+  biome route in front of that call would bypass Biolith, so the route
+  stays removed; the Rust state still answers `/ferrite biome` diagnostics,
+  which will not show Biolith's placements.
+- **spark.** With spark installed Ferrite runs in lean mode: the
+  timing-only mixins are not applied and monitor reports start off.
+  `-Dferrite.diagnostics=true` or `/ferrite diagnostics on` (after a
+  restart) restores them.
 
 ## Audit cleanup notes (non-threading)
 

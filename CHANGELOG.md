@@ -7,6 +7,63 @@ marks pre-release research builds.
 
 ## [Unreleased]
 
+### Fixed
+- **Nether and End cramming.** The batch was keyed on game time alone,
+  which every dimension shares, so the Nether and End skipped their
+  batch whenever the Overworld had already run one that tick: no pushing
+  and no cramming damage there. Batches are now keyed per dimension.
+- **Cramming only from mobs that tick.** The batch pushed and damaged
+  every loaded mob, including mobs in frozen chunks past simulation
+  distance, mobs an activation-range mod such as ServerCore skips, and
+  `/tick freeze`. Only mobs whose own `pushEntities` ran last tick now
+  push, and each mob applies its own cramming damage from its own call.
+- **Cramming push strength.** Vanilla pushes an overlapping pair from
+  each ticking member's call, so two active mobs are pushed twice per
+  tick; Ferrite pushed once. Pairs are now pushed once per ticking member.
+- **Cramming above 2048 loaded mobs.** The overflow path cancelled vanilla
+  without running a batch, so no mob in that dimension got cramming.
+  Mobs now fall back to vanilla.
+
+### Changed
+- **Lean mode with spark.** When spark is installed, about thirty
+  timing-only mixins are left out at launch and monitor reports start
+  off. `-Dferrite.diagnostics=true|false` or
+  `/ferrite diagnostics on|off|auto` (saved, applied on restart)
+  override it.
+- **Pre-chunk loader off by default.** It never measured a TPS gain and
+  loads chunks up to 16 past view distance for every moving player.
+  `/ferrite prechunk on|off|status` (saved) or `-Dferrite.prechunk=true`;
+  targets outside the world border are skipped.
+- **Furnace ticker gate stands down under Lithium,** whose furnace
+  sleeping already covers it. The sign gate is unchanged.
+- **Rust worldgen state built on first use,** not at every boot; nothing
+  on by default reads it. Worldgen, density, biome, noise, surface and
+  aquifer commands build it on demand; `-Dferrite.worldgen.eager=true`
+  restores the boot-time build.
+- **Redstone oracle runs only while AC is on.** With AC off it compared
+  vanilla with itself.
+- **Monitors stop collecting while reports are off** for entity tick,
+  mob phases, pathfinding and light, and no longer box a `Long` per
+  entity per tick. The item-frame count no longer walks every entity
+  every 5 s while nothing prints it.
+
+### Removed
+- **Hopper extract hint maintenance.** It updated a hint on every
+  container change, but the hopper hooks that read it were not carried
+  into the 26.x ports. `/ferrite hopper highway` now says the hopper
+  layer is not in 26.x builds.
+- **Biome route and prewarm.** The route mixin named a Yarn-era method
+  and never attached under Mojmap; prewarm only fed it. Not retargeted,
+  since it would bypass Biolith's biome placement.
+- **Physics hooks by default.** The `Entity.move` collide redirect and
+  pre-tick hook load only with `-Dferrite.physics.hooks=true`; nothing
+  turns the physics port on.
+
+### CI
+- Rust tests run on every push, and a headless dedicated-server smoke
+  test boots the mod in full and lean mode, fails on mixin errors, and
+  checks cramming damage in the Overworld and the Nether.
+
 ## [0.7.4-alpha] - 2026-09-07
 
 ### Fixed
