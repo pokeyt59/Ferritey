@@ -1,5 +1,8 @@
 # One target per line: <fully.qualified.Class> <method-name-regex>
 # The CI inspect job prints javap -c -p for each matching method.
-net.minecraft.world.entity.LivingEntity isPushable|onClimbable|pushEntities
-net.minecraft.world.entity.LivingEntity hasLineOfSight
-net.minecraft.world.phys.BlockHitResult isInside|getBlockPos|getDirection|miss
+net.minecraft.world.entity.ai.goal.GoalSelector tick|tickRunningGoals|goalContainsAnyFlags|goalCanBeReplacedForAllFlags|lambda.*
+net.minecraft.world.entity.ai.Brain startEachNonRunningBehavior|tickEachRunningBehavior|tickSensors|checkMemory|hasMemoryValue
+net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal findTarget|canUse|getTargetSearchArea
+net.minecraft.server.level.ServerEntityGetter getNearestEntity
+net.minecraft.world.entity.ai.targeting.TargetingConditions test
+net.minecraft.world.entity.ai.behavior.Behavior tryStart|hasRequiredMemories
