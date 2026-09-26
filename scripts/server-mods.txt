@@ -1,0 +1,10 @@
+# The rest of the server this bench models, beside scripts/worldgen-mods.txt:
+# its performance and utility mods, newest builds for this Minecraft
+# version, in the same "modrinth-slug[@version]=Display Name" form. With
+# spark installed Ferrite runs lean, as on that server. Used by the player
+# scenarios (scripts/ci-players-bench.sh).
+servercore=ServerCore
+ferrite-core=FerriteCore
+krypton=Krypton
+spark=spark
+chunky=Chunky

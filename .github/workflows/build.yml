@@ -226,8 +226,10 @@ jobs:
         shell: bash
         run: |
           mc=$(sed -n 's/^minecraft_version=//p' gradle.properties)
-          mapfile -t mods < <(grep -v '^#' scripts/worldgen-mods.txt | grep -v '^$')
-          python3 scripts/modrinth-fetch.py "$mc" run/mods "${mods[@]}" || true
+          mapfile -t mods < <(grep -hv '^#' scripts/worldgen-mods.txt scripts/server-mods.txt | grep -v '^$')
+          # C2ME only to read its jar: whether it has a build for this version
+          # and which modules it has.
+          python3 scripts/modrinth-fetch.py "$mc" run/mods "${mods[@]}" "c2me-fabric=C2ME" || true
           ls -1 run/mods || true
       - name: javap vanilla and mod targets
         shell: bash
