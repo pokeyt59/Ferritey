@@ -81,7 +81,9 @@
 		"NoiseChunkStateInvoker",
 		"NoiseGeneratorFluidAccessor",
 		"SurfaceSequencePruneMixin",
-		"SurfaceSequenceCheckMixin"
+		"SurfaceSequenceCheckMixin",
+		"ClimateRiversBiomeFoldMixin",
+		"ClimateRiversBiomeCheckMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

@@ -37,8 +37,10 @@ import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.ticks.ProtoChunkTicks;
 
 /**
- * /ferrite bench surface: the surface step of whole chunks, timed with
- * surface rule pruning on and off in rotated rounds.
+ * /ferrite bench surface: the surface step of whole chunks, timed with a
+ * surface switch on and off in rotated rounds: surface rule pruning
+ * (surface-prune, the default) or the Climate Rivers biome test fold
+ * (biome-fold).
  *
  * Each chunk is prepared once as the generator would leave it before its
  * surface step: biomes from the biome source (Biolith included) and
@@ -54,10 +56,18 @@ import net.minecraft.world.ticks.ProtoChunkTicks;
 public final class SurfaceBench {
 	private SurfaceBench() {}
 
-	public static String run(ServerLevel level, int chunks, int rounds) {
+	public static String run(ServerLevel level, int chunks, int rounds, String name) {
+		java.util.function.Consumer<Boolean> set;
+		boolean saved;
+		switch (name) {
+			case "surface-prune" -> { saved = SurfaceRulePrune.ENABLED; set = on -> SurfaceRulePrune.ENABLED = on; }
+			case "biome-fold" -> { saved = LegacyBiomeFold.ENABLED; set = on -> LegacyBiomeFold.ENABLED = on; }
+			default -> { return "[surface-bench] unknown switch " + name + " (surface-prune, biome-fold)"; }
+		}
 		try {
-			return runChecked(level, chunks, rounds);
+			return runChecked(level, chunks, rounds, name, set);
 		} catch (Throwable t) {
+			set.accept(saved);
 			StringBuilder sb = new StringBuilder("[surface-bench] failed: ").append(t);
 			StackTraceElement[] frames = t.getStackTrace();
 			for (int i = 0; i < Math.min(8, frames.length); i++) sb.append(" < ").append(frames[i]);
@@ -66,7 +76,8 @@ public final class SurfaceBench {
 		}
 	}
 
-	private static String runChecked(ServerLevel level, int chunks, int rounds) {
+	private static String runChecked(ServerLevel level, int chunks, int rounds, String name,
+			java.util.function.Consumer<Boolean> set) {
 		ChunkGenerator generator = level.getChunkSource().getGenerator();
 		if (!(generator instanceof NoiseBasedChunkGenerator noise)) return "[surface-bench] not a noise generator";
 		RandomState random = level.getChunkSource().randomState();
@@ -95,10 +106,10 @@ public final class SurfaceBench {
 		WorldGenerationContext context = new WorldGenerationContext(generator, level);
 		long[][] nanos = new long[2][rounds];
 		long[][] sums = new long[2][chunks];
-		boolean saved = SurfaceRulePrune.ENABLED;
+		boolean saved = "biome-fold".equals(name) ? LegacyBiomeFold.ENABLED : SurfaceRulePrune.ENABLED;
 		try {
 			for (int arm = 0; arm < 2; arm++) {
-				SurfaceRulePrune.ENABLED = arm == 0;
+				set.accept(arm == 0);
 				for (int i = 0; i < Math.min(chunks, 4); i++) {
 					ProtoChunk copy = prepared[i].copy(level, containers);
 					noise.buildSurface(copy, context, random, null, prepared[i].biomes, Blender.empty(), prepared[i].possible);
@@ -107,7 +118,7 @@ public final class SurfaceBench {
 			for (int round = 0; round < rounds; round++) {
 				for (int step = 0; step < 2; step++) {
 					int arm = (round + step) % 2;   // 0 = on, 1 = off
-					SurfaceRulePrune.ENABLED = arm == 0;
+					set.accept(arm == 0);
 					ProtoChunk[] copies = new ProtoChunk[chunks];
 					for (int i = 0; i < chunks; i++) copies[i] = prepared[i].copy(level, containers);
 					long start = System.nanoTime();
@@ -120,7 +131,7 @@ public final class SurfaceBench {
 				}
 			}
 		} finally {
-			SurfaceRulePrune.ENABLED = saved;
+			set.accept(saved);
 		}
 		int differing = 0;
 		for (int i = 0; i < chunks; i++) {
@@ -133,8 +144,8 @@ public final class SurfaceBench {
 		}
 		double on = median(nanos[0]) / 1e6 / chunks;
 		double off = median(nanos[1]) / 1e6 / chunks;
-		return String.format("[surface-bench] chunks=%d rounds=%d ms/chunk median: surface-prune on %.2f, off %.2f (%+.1f%%); chunks differing %d;%s",
-				chunks, rounds, on, off, 100.0 * (on - off) / off, differing, rows);
+		return String.format("[surface-bench] chunks=%d rounds=%d ms/chunk median: %s on %.2f, off %.2f (%+.1f%%); chunks differing %d;%s",
+				chunks, rounds, name, on, off, 100.0 * (on - off) / off, differing, rows);
 	}
 
 	/** A chunk as it stands before its surface step, kept as a template. */

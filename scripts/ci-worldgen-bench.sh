@@ -109,8 +109,10 @@ rcon "ferrite bench columns 100 6 noise-math" "ferrite bench columns 100 6 lazy-
 # The noise stage of whole chunks with each noise switch on and off.
 rcon "ferrite bench noise 24 6 lazy-interp" "ferrite bench noise 24 6 noise-math" \
 	"ferrite bench noise 24 6 map-memo" | tee -a "$REPORT"
-# The surface step of whole chunks with surface rule pruning on and off.
-rcon "ferrite bench surface 24 8" "ferrite worldgen surface-prune status" | tee -a "$REPORT"
+# The surface step of whole chunks with surface rule pruning on and off,
+# then with Climate Rivers' biome test folded per chunk on and off.
+rcon "ferrite bench surface 24 8" "ferrite worldgen surface-prune status" \
+	"ferrite bench surface 24 8 biome-fold" "ferrite worldgen biome-fold status" | tee -a "$REPORT"
 
 # Setup (the pen's forceload) stalls the server by design; only later
 # "Can't keep up" warnings are reported.
@@ -166,6 +168,7 @@ for spec in "${phase_list[@]}"; do
 	rcon "ferrite worldgen height-cache status" "$ISO status" "$MEMO status" "ferrite worldgen structure-dfu status" \
 		"ferrite worldgen lazy-interp status" \
 		"ferrite worldgen noise-math status" "ferrite worldgen surface-prune status" \
+		"ferrite worldgen biome-fold status" \
 		| sed "s/^/[$label] /" | tee -a "$REPORT"
 	x=$((x + 200))
 done

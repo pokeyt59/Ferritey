@@ -128,6 +128,20 @@ public final class SurfaceRulePrune {
 		}
 	}
 
+	/**
+	 * For LegacyBiomeFold: 0 if cond is the game's constant false condition,
+	 * 1 for its constant true, -1 for anything else or when the surface
+	 * rule types are not recognised.
+	 */
+	static int constantOf(Object cond) {
+		if (disabledReason != null || (!resolved && !resolve())) return -1;
+		try {
+			return constantValue(cond);
+		} catch (Throwable t) {
+			return -1;
+		}
+	}
+
 	/** 0 for the constant false, 1 for the constant true, -1 for anything else. */
 	private static int constantValue(Object cond) throws Throwable {
 		if (cond == constantFalse) return 0;
