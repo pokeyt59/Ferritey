@@ -27,8 +27,16 @@
 #   config   mixed at factor 2: defaults, simulation distance 6, and the
 #            server thread on its own core (ferrite worldgen
 #            isolate-server-core), in ABCCBA order
-#   c2me     mixed at runner speed and factor 2, then the same after a
-#            restart on a fresh world with C2ME (run/c2me) added
+#   c2me     mixed at factor 2 on four fresh worlds (same seed, same
+#            terrain): without C2ME, with it (run/c2me), without, with
+#   compat   mixed at factor 2 with Ferrite's chunk-wait guards (/ferrite
+#            compat all) off, on, on, off
+#   pregen   an elytra at factor 2 for 60 s over fresh terrain, then over a
+#            corridor pregenerated first (/ferrite pregen), twice
+# Every start first runs a 60 s warm-up arm, not measured: the first
+# player to land in ungenerated terrain stalls the server for tens of
+# seconds (Lithostitched's structure check), which says nothing about
+# exploring.
 # Extra arguments go to gradle.
 set -euo pipefail
 
@@ -157,6 +165,7 @@ calibrate() {
 		lo=-10
 		hi=19
 		best=19
+		bestm=$base
 		bestdiff=
 		while [ $((hi - lo)) -gt 1 ]; do
 			mid=$(( (lo + hi) / 2 ))
@@ -166,12 +175,13 @@ calibrate() {
 			d=$(python3 -c "print(abs($m - $target))")
 			if [ -z "$bestdiff" ] || python3 -c "import sys; sys.exit(0 if $d < $bestdiff else 1)"; then
 				best=$mid
+				bestm=$m
 				bestdiff=$d
 			fi
 			if python3 -c "import sys; sys.exit(0 if $m > $target else 1)"; then lo=$mid; else hi=$mid; fi
 		done
 		NICE[$f]=$best
-		echo "factor $f: nice $best" | tee -a "$REPORT"
+		echo "factor $f: nice $best, $bestm ms/chunk: modelled factor $(python3 -c "print(round($bestm / $ANCHOR_MS, 2))")" | tee -a "$REPORT"
 		stop_spin
 	done
 }
@@ -181,15 +191,18 @@ players_at() {
 	local x=$1
 	case "$SCENARIO" in
 		walk|horse|elytra|boat) echo "$SCENARIO:$x:0:-90" ;;
+		pregen) echo "elytra:$x:0:-90" ;;
 		*) echo "walk:$x:0:-90 horse:$x:3000:-90 elytra:$x:-3000:-90" ;;
 	esac
 }
 
 ARM=0
 # run_arm <label> <factor|1> [setup command] [teardown command]
+# ARM_X overrides where the players start, ARM_DURATION how long they travel.
 run_arm() {
-	local label=$1 factor=$2 setup=${3:-} teardown=${4:-} x from fromlog specs
-	x=$((10000 + ARM * 12000))
+	local label=$1 factor=$2 setup=${3:-} teardown=${4:-} x from fromlog specs duration
+	x=${ARM_X:-$((10000 + ARM * 12000))}
+	duration=${ARM_DURATION:-$DURATION}
 	ARM=$((ARM + 1))
 	if [ "$factor" = 1 ]; then spin off; else spin "${NICE[$factor]}"; fi
 	[ -z "$setup" ] || rcon "$setup" | sed "s/^/[$label] /" | tee -a "$REPORT"
@@ -200,7 +213,7 @@ run_arm() {
 	if [ "$label" = "$RECORD" ]; then
 		jcmd "$(game_pid)" JFR.start name=players settings="$PWD/players.jfc" filename="$PWD/players.jfr" > /dev/null || true
 	fi
-	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" players "$label" "$DURATION" "${specs[@]}" \
+	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" players "$label" "$duration" "${specs[@]}" \
 		| tee -a "$REPORT" || arm_failed=1
 	if [ "$label" = "$RECORD" ]; then jcmd "$(game_pid)" JFR.stop name=players > /dev/null || true; fi
 	# Tick gaps over 100 ms (the tick watchdog), and what the server thread
@@ -231,10 +244,48 @@ sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(perio
 echo "scenario $SCENARIO, $DURATION s per arm, runner $(sed -n 's/^Model name: *//p' cpu.txt)" | tee -a "$REPORT"
 arm_failed=
 RECORD=
-start_server "$@"
+
+warmup() { ARM_DURATION=60 run_arm warmup 1; }
+
+# boot <with-c2me: yes|no>: a fresh world with the same seed (the same terrain).
+boot() {
+	[ -z "$PID" ] || stop_server
+	[ ! -f "$FLOG" ] || cat "$FLOG" >> players-ferrite-all.log
+	cat "$LOG" >> players-server-all.log
+	rm -rf run/world
+	rm -f run/mods/c2me-*.jar
+	if [ "$1" = yes ]; then cp run/c2me/*.jar run/mods/ || fail "no C2ME jar in run/c2me"; fi
+	ARM=0
+	start_server "${GRADLE_ARGS[@]}"
+	sleep 20
+}
+
+# pregen_corridor <block x>: chunks along an elytra's 60 s path east from
+# x (about 125 chunks, plus its view distance ahead), 21 wide, generated
+# first by /ferrite pregen in squares of 21x21.
+pregen_corridor() {
+	local cx=$(( $1 >> 4 )) k before
+	echo "[pregen] corridor from chunk x $cx, $(date -u +%H:%M:%S) UTC" | tee -a "$REPORT"
+	for k in 0 1 2 3 4 5 6; do
+		before=$(grep -c "ferrite-pregen\] complete" "$FLOG" || true)
+		rcon "ferrite pregen at $((cx + 10 + 21 * k)) 0 10" > /dev/null
+		local waited=0
+		until [ "$(grep -c "ferrite-pregen\] complete" "$FLOG" || true)" -gt "$before" ]; do
+			sleep 2
+			waited=$((waited + 2))
+			[ "$waited" -lt 600 ] || fail "pregen square $k did not finish"
+		done
+	done
+	echo "[pregen] corridor done $(date -u +%H:%M:%S) UTC" | tee -a "$REPORT"
+	sleep 20
+}
+
+GRADLE_ARGS=("$@")
+start_server "${GRADLE_ARGS[@]}"
 echo "warming up"
 sleep 30
 calibrate
+warmup
 
 case "$SCENARIO" in
 	walk|horse|elytra|boat|mixed)
@@ -258,27 +309,44 @@ case "$SCENARIO" in
 		run_arm defaults-b 2
 		stop_server
 		;;
-	c2me)
-		run_arm without-c2me 1
-		run_arm without-c2me-laptop-2x 2
+	compat)
+		RECORD=guards-on-a
+		run_arm guards-off-a 2 "ferrite compat all off" "ferrite compat status"
+		run_arm guards-on-a 2 "ferrite compat all on" "ferrite compat status"
+		run_arm guards-on-b 2 "ferrite compat all on" "ferrite compat status"
+		run_arm guards-off-b 2 "ferrite compat all off" "ferrite compat all on"
+		rcon "ferrite compat status" | tee -a "$REPORT"
 		stop_server
-		cp "$FLOG" players-ferrite-1.log
-		# A fresh world, the same seed: the same terrain again, with C2ME.
-		rm -rf run/world
-		cp run/c2me/*.jar run/mods/ || fail "no C2ME jar in run/c2me"
-		ARM=0
-		start_server "$@"
-		sleep 30
-		run_arm with-c2me 1
-		run_arm with-c2me-laptop-2x 2
+		;;
+	c2me)
+		run_arm without-c2me-a 2
+		boot yes
+		warmup
+		run_arm with-c2me-a 2
+		boot no
+		warmup
+		run_arm without-c2me-b 2
+		boot yes
+		warmup
+		run_arm with-c2me-b 2
+		stop_server
+		;;
+	pregen)
+		ARM_DURATION=60 ARM_X=40000 run_arm fresh-a 2
+		pregen_corridor 60000
+		ARM_DURATION=60 ARM_X=60000 run_arm pregenerated-a 2
+		pregen_corridor 80000
+		ARM_DURATION=60 ARM_X=80000 run_arm pregenerated-b 2
+		ARM_DURATION=60 ARM_X=100000 run_arm fresh-b 2
 		stop_server
 		;;
 	*) fail "unknown scenario $SCENARIO" ;;
 esac
+[ ! -f "$FLOG" ] || cat "$FLOG" >> players-ferrite-all.log
 stop_spin
 
-if grep -q 'MISMATCH' "$FLOG" players-ferrite-1.log 2>/dev/null; then
-	grep -h -m 5 'MISMATCH' "$FLOG" players-ferrite-1.log 2>/dev/null || true
+if grep -q 'MISMATCH' players-ferrite-all.log 2>/dev/null; then
+	grep -h -m 5 'MISMATCH' players-ferrite-all.log 2>/dev/null || true
 	fail "oracle mismatches"
 fi
 

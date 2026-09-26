@@ -349,13 +349,13 @@ jobs:
   # [players-bench] or a manual run with players=true.
   players-bench:
     needs: [build-native-linux]
-    if: contains(github.event.head_commit.message, '[players-bench]') || (github.event_name == 'workflow_dispatch' && github.event.inputs.players == 'true')
+    if: contains(github.event.head_commit.message, '[players-bench') || (github.event_name == 'workflow_dispatch' && github.event.inputs.players == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        scenario: [walk, horse, elytra, boat, mixed, config, c2me]
+        scenario: [walk, horse, elytra, boat, mixed, config, c2me, pregen, compat]
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -369,7 +369,20 @@ jobs:
         with:
           name: native-linux
           path: src/main/resources/assets/ferrite/natives/linux
+      # "[players-bench:a,b]" in the commit message runs only scenarios a and b.
+      - name: pick scenario
+        id: pick
+        shell: bash
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          run=true
+          if [[ "$MSG" =~ \[players-bench:([a-z0-9,.-]+)\] ]]; then
+            [[ ",${BASH_REMATCH[1]}," == *",${{ matrix.scenario }},"* ]] || run=false
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: fetch the server's mods from Modrinth
+        if: steps.pick.outputs.run == 'true'
         shell: bash
         run: |
           mc=$(sed -n 's/^minecraft_version=//p' gradle.properties)
@@ -380,6 +393,7 @@ jobs:
           fi
           ls -1 run/mods
       - name: players benchmark
+        if: steps.pick.outputs.run == 'true'
         shell: bash
         env:
           PB_SCENARIO: ${{ matrix.scenario }}
@@ -396,7 +410,8 @@ jobs:
             players-stages.txt
             players-mods-fetched.txt
             players-server.log
-            players-ferrite-1.log
+            players-ferrite-all.log
+            players-server-all.log
             run/logs/ferrite.log
             players.jfr
           if-no-files-found: ignore

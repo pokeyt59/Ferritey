@@ -95,7 +95,7 @@ public final class ExploreBench {
 	}
 
 	/**
-	 * CPU time of the worldgen worker threads ("Worker-*") since the JVM
+	 * CPU time of the worldgen worker threads ("Worker-*", or C2ME's) since the JVM
 	 * started, including workers the pool has since retired: the bench
 	 * takes the difference over a phase, per chunk delivered.
 	 */
@@ -103,7 +103,10 @@ public final class ExploreBench {
 		ThreadMXBean mx = ManagementFactory.getThreadMXBean();
 		if (!mx.isThreadCpuTimeSupported()) return -1;
 		for (ThreadInfo info : mx.getThreadInfo(mx.getAllThreadIds())) {
-			if (info == null || !info.getThreadName().startsWith("Worker-")) continue;
+			if (info == null) continue;
+			String name = info.getThreadName();
+			// The game's worldgen pool, or C2ME's when it replaces the chunk system.
+			if (!name.startsWith("Worker-") && !name.toLowerCase(java.util.Locale.ROOT).contains("c2me")) continue;
 			long cpu = mx.getThreadCpuTime(info.getThreadId());
 			if (cpu > 0) workerCpuNanos.put(info.getThreadId(), cpu);
 		}

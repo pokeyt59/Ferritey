@@ -357,6 +357,14 @@ public final class FerriteCommand {
 													sendFeedback(ctx, "[bench] view-distance " + view + ", simulation-distance " + sim, false);
 													return Command.SINGLE_SUCCESS;
 												})))))
+				.then(Commands.literal("compat")
+						.then(Commands.literal("status").executes(ctx -> {
+							sendFeedback(ctx, me.apika.apikaprobe.compat.ChunkWaitGuards.status(), false);
+							return Command.SINGLE_SUCCESS;
+						}))
+						.then(Commands.argument("guard", StringArgumentType.word())
+								.then(Commands.literal("on").executes(ctx -> setCompatGuard(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> setCompatGuard(ctx, false)))))
 				.then(Commands.literal("pregen")
 						.then(Commands.argument("radius", IntegerArgumentType.integer(1, 50))
 								.executes(FerriteCommand::pregenStart))
@@ -2243,6 +2251,17 @@ public final class FerriteCommand {
 			me.apika.apikaprobe.worldgen.SurfaceRulePrune.ENABLED = on;
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.worldgen.SurfaceRulePrune.status(), on != null);
+		return Command.SINGLE_SUCCESS;
+	}
+
+	/** /ferrite compat lithostitched|spawning|roguelike|all on|off: ChunkWaitGuards. */
+	private static int setCompatGuard(CommandContext<CommandSourceStack> ctx, boolean on) {
+		String name = StringArgumentType.getString(ctx, "guard");
+		if (!me.apika.apikaprobe.compat.ChunkWaitGuards.set(name, on)) {
+			sendFeedback(ctx, "[compat] unknown guard " + name + " (lithostitched, spawning, roguelike, all)", false);
+			return 0;
+		}
+		sendFeedback(ctx, me.apika.apikaprobe.compat.ChunkWaitGuards.status(), true);
 		return Command.SINGLE_SUCCESS;
 	}
 

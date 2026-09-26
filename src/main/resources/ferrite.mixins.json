@@ -83,7 +83,9 @@
 		"SurfaceSequencePruneMixin",
 		"SurfaceSequenceCheckMixin",
 		"ClimateRiversBiomeFoldMixin",
-		"ClimateRiversBiomeCheckMixin"
+		"ClimateRiversBiomeCheckMixin",
+		"LithostitchedAttributeMixin",
+		"NaturalSpawnerNeighbourMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
