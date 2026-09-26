@@ -140,7 +140,27 @@ marks pre-release research builds.
   1,826,840 while exploring, no mismatch. The surface step of whole
   chunks took 5.84 ms against 6.76 (13.5% less, ahead in all eight
   rounds, identical blocks). `/ferrite worldgen surface-prune
-  on|off|status`, `-Dferrite.worldgen.surfaceprune=false`.
+  on|off|status`, `-Dferrite.worldgen.surfaceprune=false`. The bench
+  overstates it: its chunks list only their own biomes as possible,
+  while live chunks list more, so live generation leaves out one rule in
+  eighteen, not one in five.
+- **Climate Rivers' surface biome test folded per chunk.** Climate
+  Rivers adds surface rules with its own biome test, which looks up the
+  block's biome at every block (a fuzzy lookup). The game's own test
+  first checks the chunk's possible biomes and becomes a constant when
+  the answer cannot vary; Climate Rivers' skips that. Ferrite applies
+  the game's rule to it: the same possible biomes, Climate Rivers' own
+  predicate on each, and the game's two constant conditions, so surface
+  rule pruning then drops the rule. One fold in 64 is left per-block and
+  every answer checked against the constant: 75,919 checks in the
+  bench's setup and 481,187 while exploring, no mismatch. The surface
+  step of whole chunks took 6.36 ms against 7.05 (9.8% less, identical
+  blocks) in the bench, where nearly every test folds; live generation
+  folds about a quarter of them, so the gain there is a few percent of
+  the surface step. Only with Climate Rivers installed.
+  `/ferrite worldgen biome-fold on|off|status`,
+  `-Dferrite.worldgen.biomefold=false`; `/ferrite bench surface`
+  takes the switch (`surface-prune` or `biome-fold`).
 
   Together with the noise sampling shortcuts, rotated explore phases
   used 94 ms of worldgen CPU per chunk against 98 without either
@@ -275,6 +295,11 @@ marks pre-release research builds.
   but whole-chunk biome lookups were only 2-5% faster over four runs:
   the second-best bound keeps many nodes in play, and a traversal that
   visits fewer would change which leaf wins a tie.
+- Checked and left alone: the aquifer (about 9% of the worldgen
+  workers' time). 26.2's aquifer already returns the global fluid
+  without searching above the chunk's surface (`skipSamplingAboveY`),
+  the shortcut this was going to add; what remains is a per-block
+  search of the 12 nearest aquifer cells that is already tight.
 - Tried and dropped: moving the chunks the server thread waits for to
   the front of the chunk task queue. The same Roguelike Dungeons build
   waited 12 times (mean 74 ms, 1.85 s of slow ticks) without it and 10

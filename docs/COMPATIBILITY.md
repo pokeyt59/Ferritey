@@ -382,6 +382,10 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   target. Their oracles ran clean with this mod list (the mapping memo
   over 5.7 million checks, lazy interpolation over 2.5 million, surface
   rule pruning over 1.8 million, noise sampling over 200,000 per start).
+  Climate Rivers' own surface biome test (`LegacyBiomeConditionSource`)
+  gets the game's per-chunk fold through a `@Pseudo` mixin on its
+  `apply`, which reads only the context's possible biomes and Climate
+  Rivers' own predicate; without Climate Rivers the mixin does nothing.
   Fast Noise turns its own surface and biome tree optimisations off when
   Biolith is installed, so the game's surface rules run and pruning
   applies. Fast Noise replaces `populateNoise`
