@@ -74,8 +74,9 @@ marks pre-release research builds.
     and for 17-58 s when the first player landed in fresh terrain.
   - **Roguelike Dungeons.** It builds a room once the 3×3 chunks around
     it are loaded. Its check (`WorldEditor.surroundingChunksLoaded`)
-    loaded them itself, with freezes of up to 7.5 s. It now counts only
-    generated chunks, so the room waits for them.
+    loaded them itself, with freezes of up to 7.5 s. A room also writes
+    blocks past those 3×3 chunks, which generated them as well. A room
+    now waits until the 5×5 chunks around it are generated.
   - **The cat spawner.** Once a minute it tries a spot 8-24 blocks from a
     random player, after checking only that the chunks there are
     scheduled. It now skips a spot whose chunk is not generated yet, the

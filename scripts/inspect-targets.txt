@@ -4,5 +4,6 @@
 # "@sig <jar-name-regex> <entry-regex> <member-regex>" prints matching member signatures.
 # Mod jars come from scripts/worldgen-mods.txt, fetched by the inspect job.
 # The job log keeps only its last 5000 lines: keep the list short.
-com.greymerk.roguelike.editor.WorldEditor surroundingChunksLoaded|isChunkLoaded|WorldEditor
-com.greymerk.roguelike.state.RoguelikeState getLoadedRooms|lambda\$getLoadedRooms\$2|getLoadedDungeons|lambda\$getLoadedDungeons\$0
+net.minecraft.world.level.levelgen.PhantomSpawner tick
+net.minecraft.server.level.ServerLevel getCurrentDifficultyAt
+net.minecraft.world.level.Level getCurrentDifficultyAt|updateNeighbourForOutputSignal

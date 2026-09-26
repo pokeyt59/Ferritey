@@ -411,10 +411,13 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   `logs/ferrite.log`. The room check itself
   (`WorldEditor.surroundingChunksLoaded`) asked `Level.hasChunk`, which
   is true once a chunk is scheduled, and then loaded the chunk. The
-  `roguelike` chunk-wait guard (`RoguelikeLoadedMixin`, `@Pseudo`) makes
-  it count only generated chunks, so a room waits for its chunks
-  instead. Blocks read beyond those chunks while a room is built (for
-  example by its mud filter) can still wait.
+  `roguelike` chunk-wait guard (`RoguelikeLoadedMixin`, `@Pseudo`)
+  counts one of those chunks as loaded only once it and its eight
+  neighbours are generated. A room then waits until the 5×5 chunks
+  around it exist, because rooms also write blocks past the 3×3 (a room
+  fill reading a block entity there generated a chunk on the bench). A
+  room that reaches further than two chunks can still make the server
+  wait.
 - **Lithostitched.** Its structure attribute handler runs every 5 ticks
   for each player. It skips players whose chunk `ServerLevel.isLoaded`
   says is not loaded, then looks up the structure at the player's
