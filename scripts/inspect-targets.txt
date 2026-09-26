@@ -5,5 +5,10 @@
 # "@grep <jar-name-regex> <text>" lists the methods whose bytecode contains the text.
 # Mod jars come from scripts/worldgen-mods.txt, fetched by the inspect job.
 # The job log keeps only its last 5000 lines: keep the list short.
-@grep roguelike-dungeons isChunkLoaded
-@grep roguelike-dungeons surroundingChunksLoaded
+@list [Gg]eyser ^fabric\.mod\.json$
+@list [Ff]loodgate ^fabric\.mod\.json$
+@list [Gg]eyser mixins?\.json$
+@list [Ff]loodgate mixins?\.json$
+@list [Gg]eyser org/geysermc/geyser/network/GameProtocol\.class$
+@grep [Gg]eyser alidateBedrockLogin
+@grep [Gg]eyser validate-bedrock-login

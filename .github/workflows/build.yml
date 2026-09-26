@@ -232,12 +232,26 @@ jobs:
           mc=$(sed -n 's/^minecraft_version=//p' gradle.properties)
           mapfile -t mods < <(grep -hv '^#' scripts/worldgen-mods.txt scripts/server-mods.txt | grep -v '^$')
           # C2ME only to read its jar: whether it has a build for this version
-          # and which modules it has.
-          python3 scripts/modrinth-fetch.py "$mc" run/mods "${mods[@]}" "c2me-fabric=C2ME" || true
+          # and which modules it has. Geyser and Floodgate likewise.
+          mapfile -t geyser < <(grep -v '^#' scripts/geyser-mods.txt | grep -v '^$')
+          python3 scripts/modrinth-fetch.py "$mc" run/mods "${mods[@]}" "c2me-fabric=C2ME" "${geyser[@]}" || true
           ls -1 run/mods || true
       - name: javap vanilla and mod targets
         shell: bash
         run: scripts/ci-inspect.sh
+      # The Bedrock client the Geyser job would use: which Bedrock versions it
+      # speaks, to compare with the ones Geyser accepts (GameProtocol above).
+      - name: bedrock-protocol versions
+        shell: bash
+        run: |
+          node --version || true
+          echo "bedrock-protocol $(npm view bedrock-protocol version 2>/dev/null)"
+          mkdir -p /tmp/bp && cd /tmp/bp
+          if npm pack bedrock-protocol > /dev/null 2>&1; then
+            tar -xzf bedrock-protocol-*.tgz
+            grep -nE 'VERSION|Versions|offline' package/src/options.js | head -30 || true
+            grep -rnE 'offline' package/src/client.js package/src/client/*.js 2>/dev/null | head -10 || true
+          fi
 
   # Mob-heavy benchmark with Lithium loaded: /tick query MSPT across
   # interleaved A/B arms plus a JFR profile of the first arm. Runs on

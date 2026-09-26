@@ -1,0 +1,5 @@
+# Geyser and Floodgate: Bedrock players on the Java server
+# (scripts/ci-geyser.sh). Fetched with scripts/modrinth-fetch.py, newest
+# Fabric build for the game version: slug[@version][=Display Name].
+geyser=Geyser
+floodgate=Floodgate
