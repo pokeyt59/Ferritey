@@ -114,9 +114,9 @@ spin() {
 	stop_spin
 	[ "$1" = off ] && return
 	if sudo -n true 2>/dev/null; then
-		sudo -n python3 scripts/cpu-share.py "$CPUS" "$1" &
+		sudo -n python3 scripts/cpu-share.py "$CPUS" "$1" 2>/dev/null &
 	else
-		python3 scripts/cpu-share.py "$CPUS" "$1" &
+		python3 scripts/cpu-share.py "$CPUS" "$1" 2>/dev/null &
 	fi
 	SPIN_PID=$!
 	sleep 1
@@ -134,23 +134,13 @@ noise_ms() {
 	rcon "ferrite bench noise 24 3 lazy-interp" | sed -n 's/.*lazy-interp on \([0-9.]*\),.*/\1/p' | head -1
 }
 
-# The nice level whose spinner leaves a thread base/target of its CPU
-# (Linux's CFS weights, nice -20..19).
-pick_nice() {
-	python3 - "$1" "$2" <<'PY'
-import sys
-w = [88761, 71755, 56483, 46273, 36291, 29154, 23254, 18705, 14949, 11916, 9548, 7620, 6100, 4904,
-     3906, 3121, 2501, 1991, 1586, 1277, 1024, 820, 655, 526, 423, 335, 272, 215, 172, 137, 110, 87,
-     70, 56, 45, 36, 29, 23, 18, 15]
-base, target = float(sys.argv[1]), float(sys.argv[2])
-want = 1024 * (target / base - 1)
-print(min(range(-20, 20), key=lambda n: abs(w[n + 20] - want)))
-PY
-}
-
 declare -A NICE
+# For each factor, the nice level at which the spinners bring the noise
+# bench closest to FACTOR x ANCHOR_MS. Slowdown falls as nice rises; it
+# is more than CFS weights alone give, since a spinner also shares its
+# physical core with the sibling hyperthread, so it is bisected, measured.
 calibrate() {
-	local base target n m attempt
+	local base target lo hi mid m best bestdiff
 	stop_spin
 	noise_ms > /dev/null   # JIT warm-up
 	base=$(noise_ms)
@@ -164,20 +154,24 @@ calibrate() {
 			echo "factor $f: runner already at $base ms/chunk (target $target), no spinners" | tee -a "$REPORT"
 			continue
 		fi
-		n=$(pick_nice "$base" "$target")
-		for attempt in 1 2 3 4 5 6; do
-			spin "$n"
+		lo=-10
+		hi=19
+		best=19
+		bestdiff=
+		while [ $((hi - lo)) -gt 1 ]; do
+			mid=$(( (lo + hi) / 2 ))
+			spin "$mid"
 			m=$(noise_ms)
-			echo "factor $f: nice $n gives $m ms/chunk (target $target)" | tee -a "$REPORT"
-			if python3 -c "import sys; sys.exit(0 if $m < $target * 0.95 else 1)" && [ "$n" -gt -20 ]; then
-				n=$((n - 1))
-			elif python3 -c "import sys; sys.exit(0 if $m > $target * 1.05 else 1)" && [ "$n" -lt 19 ]; then
-				n=$((n + 1))
-			else
-				break
+			echo "factor $f: nice $mid gives $m ms/chunk (target $target)" | tee -a "$REPORT"
+			d=$(python3 -c "print(abs($m - $target))")
+			if [ -z "$bestdiff" ] || python3 -c "import sys; sys.exit(0 if $d < $bestdiff else 1)"; then
+				best=$mid
+				bestdiff=$d
 			fi
+			if python3 -c "import sys; sys.exit(0 if $m > $target else 1)"; then lo=$mid; else hi=$mid; fi
 		done
-		NICE[$f]=$n
+		NICE[$f]=$best
+		echo "factor $f: nice $best" | tee -a "$REPORT"
 		stop_spin
 	done
 }
@@ -209,11 +203,17 @@ run_arm() {
 	python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" players "$label" "$DURATION" "${specs[@]}" \
 		| tee -a "$REPORT" || arm_failed=1
 	if [ "$label" = "$RECORD" ]; then jcmd "$(game_pid)" JFR.stop name=players > /dev/null || true; fi
+	# Tick gaps over 100 ms (the tick watchdog), and what the server thread
+	# was doing in the three longest.
 	tail -n +"$((from + 1))" "$FLOG" | python3 -c '
 import re, sys
-gaps = [int(m.group(1)) for m in re.finditer(r"\[slow-tick\] tick \d+: (\d+) ms between ticks", sys.stdin.read())]
+found = [(int(m.group(1)), line) for line in sys.stdin
+         for m in [re.search(r"\[slow-tick\] tick \d+: (\d+) ms between ticks", line)] if m]
+gaps = [g for g, _ in found]
 print(f"[{sys.argv[1]}] tick gaps over 100 ms: {len(gaps)}, longest {max(gaps) if gaps else 0} ms, "
-      f"total {sum(gaps) / 1000:.1f} s")' "$label" | tee -a "$REPORT"
+      f"total {sum(gaps) / 1000:.1f} s")
+for g, line in sorted(found, key=lambda f: -f[0])[:3]:
+    print(f"[{sys.argv[1]}]   " + line.strip()[line.find("[slow-tick]"):][:1500])' "$label" | tee -a "$REPORT"
 	echo "[$label] \"Can't keep up\" warnings: $(tail -n +"$((fromlog + 1))" "$LOG" | grep -c "Can't keep up" || true)" | tee -a "$REPORT"
 	[ -z "$teardown" ] || rcon "$teardown" > /dev/null
 	spin off

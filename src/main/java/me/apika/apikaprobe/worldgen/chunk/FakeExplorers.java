@@ -45,7 +45,9 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * when the chunk ahead is not loaded yet, as a client does; elytra and
  * boat keep going at a fixed height and outrun loading if the server
  * falls behind. Players are in creative mode, so mobs leave them alone,
- * and nothing runs their movement physics.
+ * and nothing runs their movement physics (a connection's network tick
+ * would); the bench sets their positions and tells the chunk map each
+ * tick, as a movement packet does.
  *
  * Status per player: chunks sent (per second), chunks within 5 of the
  * player not yet sent ("holes", sampled each second: what a player sees
@@ -139,6 +141,8 @@ public final class FakeExplorers {
 		player.setGameMode(GameType.CREATIVE);
 		double y = mode == Mode.ELYTRA ? 200 : mode == Mode.BOAT ? level.getSeaLevel() : level.getSeaLevel() + 2;
 		player.teleportTo(level, x, y, z, Set.of(), (float) headingDeg, 0f, false);
+		// The chunk map follows a player on movement; start it at the destination.
+		level.getChunkSource().move(player);
 		Explorer e = new Explorer(player, connection, mode, x, y, z, headingDeg);
 		holder[0] = e;
 		explorers.add(e);
@@ -191,6 +195,7 @@ public final class FakeExplorers {
 			LevelChunk ahead = level.getChunkSource().getChunkNow((int) Math.floor(nx) >> 4, (int) Math.floor(nz) >> 4);
 			if (ahead == null || !e.sent.contains(ahead.getPos().pack())) {
 				if (e.ticks % 20 == 0) e.secondsWaiting++;
+				level.getChunkSource().move(e.player);
 				return;
 			}
 			e.y = ahead.getHeight(Heightmap.Types.MOTION_BLOCKING, (int) Math.floor(nx) & 15, (int) Math.floor(nz) & 15) + 1;

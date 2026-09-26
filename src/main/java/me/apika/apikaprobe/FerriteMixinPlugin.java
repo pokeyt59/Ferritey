@@ -46,6 +46,12 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 			P + "RedstoneWireMixin", P + "RedstoneGateMixin", P + "DefaultRedstoneControllerMixin",
 			P + "EntitySectionStorageMixin");
 
+	// C2ME rewrites these targets (its opts-allocs overwrites
+	// SequenceRuleSource.apply), and Mixin refuses to inject into a method
+	// a higher-priority mixin replaced: with C2ME they stand down.
+	private static final Set<String> C2ME_OVERLAP_MIXINS = Set.of(
+			P + "SurfaceSequencePruneMixin", P + "SurfaceSequenceCheckMixin");
+
 	// Also carries the opt-in nav-cache path parity check.
 	private static final String PATH_FINDER_MIXIN = P + "PathFinderMixin";
 
@@ -65,6 +71,8 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 	public static final String DIAGNOSTICS_PROPERTY = "ferrite.diagnostics.effective";
 
 	private boolean moonrise;
+	private boolean c2me;
+	private boolean loggedC2me;
 	private boolean logged;
 	private boolean diagnostics;
 	private boolean navParity;
@@ -80,6 +88,7 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 		if (logFile == null || logFile.isEmpty()) logFile = readSaved(savedConfig, "log-file");
 		FerriteLogFile.install(loader.getGameDir(), logFile == null || Boolean.parseBoolean(logFile));
 		this.moonrise = loader.isModLoaded("moonrise");
+		this.c2me = loader.isModLoaded("c2me");
 		this.navParity = Boolean.parseBoolean(System.getProperty("ferrite.nav.parity", "false"));
 		this.physicsHooks = Boolean.getBoolean("ferrite.physics.hooks");
 		// Same parse as NavigationCacheBridge.WALK_CACHE_ENABLED.
@@ -129,6 +138,13 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 		}
 		if (!diagnostics && (TIMING_MIXINS.contains(mixinClassName)
 				|| (!navParity && PATH_FINDER_MIXIN.equals(mixinClassName)))) {
+			return false;
+		}
+		if (c2me && C2ME_OVERLAP_MIXINS.contains(mixinClassName)) {
+			if (!loggedC2me) {
+				LOGGER.info("[ferrite] C2ME detected: surface rule pruning stands down (C2ME rewrites the same code)");
+				loggedC2me = true;
+			}
 			return false;
 		}
 		if (moonrise && LIGHT_MONITOR_MIXINS.contains(mixinClassName)) {

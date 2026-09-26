@@ -4,20 +4,4 @@
 # "@sig <jar-name-regex> <entry-regex> <member-regex>" prints matching member signatures.
 # Mod jars come from scripts/worldgen-mods.txt, fetched by the inspect job.
 # The job log keeps only its last 5000 lines: keep the list short.
-@list .* LegacyBiomeConditionSource.*\.class$
-@list [cC]2[mM][eE] ^[^/]*\.(toml|json)$
-@sig minecraft-extracted_server net/minecraft/server/players/PlayerList\.class placeNewPlayer|remove\(|getPlayer\(|getPlayerCount
-@sig minecraft-extracted_server net/minecraft/server/network/CommonListenerCookie\.class .
-@sig minecraft-extracted_server net/minecraft/server/level/ClientInformation\.class createDefault
-@sig minecraft-extracted_server net/minecraft/network/Connection\.class Connection\(|send\(|isConnected|channel|setupOutboundProtocol|setupInboundProtocol|setListenerForServerboundHandshake|handleDisconnection|setReadOnly|disconnect\(|isMemoryConnection|getRemoteAddress|flushChannel
-@sig minecraft-extracted_server net/minecraft/server/level/ServerPlayer\.class ServerPlayer\(|doTick|snapTo|absSnapTo|moveTo|teleportTo|setServerLevel|setGameMode|connection;|chunkPosition
-@sig minecraft-extracted_server net/minecraft/server/level/ChunkMap\.class move\(|updatePlayerStatus
-@sig minecraft-extracted_server net/minecraft/core/UUIDUtil\.class createOfflinePlayerUUID
-@sig authlib com/mojang/authlib/GameProfile\.class GameProfile\(
-@sig minecraft-extracted_server net/minecraft/network/protocol/game/(ServerboundChunkBatchReceivedPacket|ClientboundChunkBatchFinishedPacket)\.class .
-@sig minecraft-extracted_server net/minecraft/network/protocol/common/(ClientboundKeepAlivePacket|ServerboundKeepAlivePacket)\.class .
-@sig minecraft-extracted_server net/minecraft/server/network/ServerCommonPacketListenerImpl\.class handleKeepAlive|keepConnectionAlive|send\(
-net.minecraft.server.network.PlayerChunkSender PlayerChunkSender|sendNextChunks|onChunkBatchReceivedByClient|markChunkPendingToSend|collectChunksToSend
-net.minecraft.server.network.ServerGamePacketListenerImpl tick|handleChunkBatchReceived
-net.minecraft.server.level.ServerPlayer tick
-net.minecraft.world.level.levelgen.Aquifer$NoiseBasedAquifer computeSubstance|computeFluid|getAquiferStatus|calculatePressure|similarity|getIndex|NoiseBasedAquifer
+@list ^c2me-fabric-(opts|rewrites|fixes|threading|notickvd|base) ^[^/]*\.mixins\.json$

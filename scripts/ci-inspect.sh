@@ -18,6 +18,13 @@ jars+=("${more[@]}")
 if [ -d run/mods ]; then
 	mapfile -t mods < <(find run/mods -name '*.jar' 2>/dev/null)
 	jars+=("${mods[@]}")
+	# Jars nested in mod jars (META-INF/jars), such as C2ME's modules.
+	mkdir -p inspect-nested
+	for m in "${mods[@]}"; do
+		unzip -o -q "$m" 'META-INF/jars/*.jar' -d "inspect-nested/$(basename "$m" .jar)" 2>/dev/null || true
+	done
+	mapfile -t nested < <(find inspect-nested -name '*.jar' 2>/dev/null)
+	jars+=("${nested[@]}")
 fi
 echo "candidate jars: ${#jars[@]}"
 
