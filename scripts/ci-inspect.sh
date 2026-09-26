@@ -56,6 +56,24 @@ done
 	done
 done
 
+# "@grep <jar-name-regex> <text>" prints every method, in every class of
+# the matching jars, whose bytecode listing contains the text (callers of
+# a method, readers of a field). One javap per 200 classes.
+{ grep '^@grep ' scripts/inspect-targets.txt || true; } | while read -r _ jre text; do
+	for j in "${jars[@]}"; do
+		[[ "$(basename "$j")" =~ $jre ]] || continue
+		echo
+		echo "######## @grep $text  ($j)"
+		unzip -Z1 "$j" | grep -E '\.class$' | sed 's/\.class$//' | xargs -r -n 200 javap -c -p -classpath "$j" 2>/dev/null \
+			| text="$text" awk '
+				BEGIN { t = ENVIRON["text"] }
+				/^[a-z].*(class|interface|enum|record) [^ ]+/ { cls = $0; sub(/ (extends|implements) .*/, "", cls); sub(/ *\{$/, "", cls); n = split(cls, w, " "); cls = w[n] }
+				/^  [^ ].*\(/ { m = $0 }
+				index($0, t) && m != "" { key = cls " :: " m; if (!(key in seen)) { seen[key] = 1; print "#grep " key } }
+			' || true
+	done
+done
+
 { grep -v '^#\|^@' scripts/inspect-targets.txt || true; } | while read -r cls methods; do
 	[ -n "$cls" ] || continue
 	entry="${cls//.//}.class"

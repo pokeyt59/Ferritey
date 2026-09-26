@@ -2,8 +2,8 @@
 # The CI inspect job prints javap -c -p for each matching method.
 # "@list <jar-name-regex> <entry-regex>" prints matching entries of matching jars.
 # "@sig <jar-name-regex> <entry-regex> <member-regex>" prints matching member signatures.
+# "@grep <jar-name-regex> <text>" lists the methods whose bytecode contains the text.
 # Mod jars come from scripts/worldgen-mods.txt, fetched by the inspect job.
 # The job log keeps only its last 5000 lines: keep the list short.
-@list roguelike-dungeons WorldTickGenerateRooms\.class$
-com.greymerk.roguelike.state.RoguelikeState getLoadedDungeons|getLoadedRooms|update|lambda\$getLoadedDungeons\$0|lambda\$getLoadedRooms\$[01]|lambda\$update\$[0-2]
-com.greymerk.roguelike.editor.WorldEditor isChunkLoaded
+@grep roguelike-dungeons isChunkLoaded
+@grep roguelike-dungeons surroundingChunksLoaded
