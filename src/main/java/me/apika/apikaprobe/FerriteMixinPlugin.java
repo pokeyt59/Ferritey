@@ -46,11 +46,23 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 			P + "RedstoneWireMixin", P + "RedstoneGateMixin", P + "DefaultRedstoneControllerMixin",
 			P + "EntitySectionStorageMixin");
 
-	// C2ME rewrites these targets (its opts-allocs overwrites
-	// SequenceRuleSource.apply), and Mixin refuses to inject into a method
-	// a higher-priority mixin replaced: with C2ME they stand down.
+	// C2ME (priority 1100) rewrites the classes these hook: NoiseChunk and
+	// its interpolators and caches, the density function visitor, the noise
+	// router's RandomState, ImprovedNoise/PerlinNoise/BlendedNoise, the
+	// noise generator, DataFixTypes, and the surface rule sequences (its
+	// opts-dfc, opts-math, opts-natives-math, opts-allocs, chunk system and
+	// threading modules). Mixin refuses to inject into a method a
+	// higher-priority mixin replaced, so the server would not start: with
+	// C2ME these stand down and C2ME's versions run. Accessors and invokers
+	// stay; they only call.
 	private static final Set<String> C2ME_OVERLAP_MIXINS = Set.of(
-			P + "SurfaceSequencePruneMixin", P + "SurfaceSequenceCheckMixin");
+			P + "SurfaceSequencePruneMixin", P + "SurfaceSequenceCheckMixin",
+			P + "ImprovedNoiseMathMixin", P + "PerlinWrapMixin",
+			P + "LazyInterpolationChunkMixin", P + "LazyInterpolatorMixin",
+			P + "NoiseChunkMappingMemoMixin", P + "RecursiveVisitorMemoMixin",
+			P + "BaseHeightCacheMixin", P + "StructureFixTimingMixin",
+			P + "AquiferRouteMixin", P + "BulkChunkDensityMixin", P + "CacheRouteCaptureMixin",
+			P + "ChunkNoiseSamplerMixin", P + "NoiseConfigCaptureMixin");
 
 	// Also carries the opt-in nav-cache path parity check.
 	private static final String PATH_FINDER_MIXIN = P + "PathFinderMixin";
@@ -142,7 +154,9 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 		}
 		if (c2me && C2ME_OVERLAP_MIXINS.contains(mixinClassName)) {
 			if (!loggedC2me) {
-				LOGGER.info("[ferrite] C2ME detected: surface rule pruning stands down (C2ME rewrites the same code)");
+				LOGGER.info("[ferrite] C2ME detected: {} worldgen hooks stand down (noise sampling, lazy interpolation, "
+						+ "mapping memo, height cache, structure fix cache, surface pruning); C2ME rewrites the same code",
+						C2ME_OVERLAP_MIXINS.size());
 				loggedC2me = true;
 			}
 			return false;
