@@ -34,7 +34,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * at a mode's speed.
  *
  * Unlike the ticket bench (ExploreBench) they bring what a real explorer
- * brings: player chunk loading at the server's view distance, chunks
+ * brings: player chunk loading at the server's view distance (the client
+ * asks for the game's default render distance, 12), chunks
  * built into packets and sent (the server paces sending by the client's
  * batch acknowledgements, answered here one tick later at a client's
  * usual rate), entity tracking, natural spawning around them, and mobs
@@ -62,6 +63,11 @@ public final class FakeExplorers {
 
 	/** What a client usually asks for after a batch (its measured chunk processing rate). */
 	private static final float CLIENT_CHUNKS_PER_TICK = 10f;
+	/**
+	 * The render distance the client asks for (the game's default); the
+	 * server uses the smaller of this and its view distance.
+	 */
+	private static final int CLIENT_VIEW_DISTANCE = 12;
 
 	enum Mode {
 		WALK(5.6, true), HORSE(10.0, true), ELYTRA(33.0, false), BOAT(40.0, false);
@@ -130,14 +136,15 @@ public final class FakeExplorers {
 		String name = "bench" + (nextId++);
 		UUID id = UUIDUtil.createOfflinePlayerUUID(name);
 		GameProfile profile = new GameProfile(id, name);
-		ServerPlayer player = new ServerPlayer(server, level, profile, ClientInformation.createDefault());
+		ClientInformation client = clientInformation();
+		ServerPlayer player = new ServerPlayer(server, level, profile, client);
 		Explorer[] holder = new Explorer[1];
 		FakeConnection connection = new FakeConnection(packet -> {
 			Explorer e = holder[0];
 			if (e != null) onPacket(e, packet);
 		});
 		server.getPlayerList().placeNewPlayer(connection, player,
-				new CommonListenerCookie(profile, 0, ClientInformation.createDefault(), false));
+				new CommonListenerCookie(profile, 0, client, false));
 		player.setGameMode(GameType.CREATIVE);
 		double y = mode == Mode.ELYTRA ? 200 : mode == Mode.BOAT ? level.getSeaLevel() : level.getSeaLevel() + 2;
 		player.teleportTo(level, x, y, z, Set.of(), (float) headingDeg, 0f, false);
@@ -147,6 +154,29 @@ public final class FakeExplorers {
 		holder[0] = e;
 		explorers.add(e);
 		return String.format("[bench-players] %s joined as %s at %.0f %.0f heading %.0f", name, mode.name().toLowerCase(java.util.Locale.ROOT), x, z, headingDeg);
+	}
+
+	/**
+	 * A client's settings with its render distance. The game's default
+	 * settings ask for 2 chunks (a placeholder until a client sends its
+	 * own), which would load a 5x5 area. ClientInformation is a record:
+	 * rebuilt from the default with the view distance replaced.
+	 */
+	private static ClientInformation clientInformation() {
+		ClientInformation base = ClientInformation.createDefault();
+		try {
+			java.lang.reflect.RecordComponent[] parts = ClientInformation.class.getRecordComponents();
+			Object[] values = new Object[parts.length];
+			Class<?>[] types = new Class<?>[parts.length];
+			for (int i = 0; i < parts.length; i++) {
+				types[i] = parts[i].getType();
+				values[i] = parts[i].getAccessor().invoke(base);
+				if (parts[i].getName().equals("viewDistance")) values[i] = CLIENT_VIEW_DISTANCE;
+			}
+			return ClientInformation.class.getDeclaredConstructor(types).newInstance(values);
+		} catch (ReflectiveOperationException e) {
+			throw new IllegalStateException("cannot set a bench player's view distance", e);
+		}
 	}
 
 	/** Called for every packet the server sends to an explorer, on the thread that sends it. */
@@ -247,8 +277,10 @@ public final class FakeExplorers {
 				total += e.chunksSent;
 				if (sb.length() > 0) sb.append('\n');
 				sb.append(String.format(
-						"[bench-players] %s %s travelled=%.0f blocks chunks_sent=%d (%.1f/s) holes_r5 avg=%.1f max=%d seconds_hole_within_2=%d seconds_waiting=%d of %.0f s",
-						e.player.getScoreboardName(), e.mode.name().toLowerCase(java.util.Locale.ROOT), e.travelled,
+						"[bench-players] %s %s view=%d travelled=%.0f blocks chunks_sent=%d (%.1f/s) holes_r5 avg=%.1f max=%d seconds_hole_within_2=%d seconds_waiting=%d of %.0f s",
+						e.player.getScoreboardName(), e.mode.name().toLowerCase(java.util.Locale.ROOT),
+						Math.min(e.player.requestedViewDistance(), e.player.level().getServer().getPlayerList().getViewDistance()),
+						e.travelled,
 						e.chunksSent, e.chunksSent / seconds,
 						e.holeSamples == 0 ? 0.0 : (double) e.holeSum / e.holeSamples, e.holeMax,
 						e.secondsHoleNear, e.secondsWaiting, seconds));
