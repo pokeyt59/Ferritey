@@ -109,7 +109,19 @@ marks pre-release research builds.
   guards, went the same way: 31.5 and 15 s off against 3.4 and 11.4 s
   on, then 29.6 and 21.6 s off against 4.4 and 2.5 s on. Chunks sent
   and mobs near the players (walker 57-89, rider 21-91) varied with the
-  terrain, not with the guards. `/ferrite compat
+  terrain, not with the guards. Two more runs, with all four guards and
+  the Roguelike dungeon gate, gave 28.7 and 14.8 s off against 4.2 and
+  2.6 s on, then 23.3 and 17.0 s off against 3.4 and 3.2 s on. In the
+  "on" arms, no freeze waited for a chunk.
+
+  Roguelike rooms and dungeons are built later with the guard. They wait
+  until the chunks around them are generated, which happens once a
+  player is within about 8 chunks at view distance 10. Without the
+  guard, the check forced those chunks at the edge of the loaded area,
+  often only to fail on the next chunk. In one run, 0 rooms were cleared
+  to build over the two guards-on arms, against 33 in the guards-off arm
+  after them. That second arm built rooms the guards-on arms had left
+  waiting. `/ferrite compat
   lithostitched|spawners|roguelike|all on|off` and `/ferrite compat
   status`. Session only. `-Dferrite.compat.<name>=false` turns one off at
   boot. The Lithostitched and Roguelike hooks are `@Pseudo` and do
