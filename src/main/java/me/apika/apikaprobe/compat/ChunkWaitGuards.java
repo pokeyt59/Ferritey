@@ -28,6 +28,8 @@ import net.minecraft.server.level.ServerLevel;
  *   - roguelike: Roguelike Dungeons builds rooms whose surrounding 3x3
  *     chunks are loaded; its check loaded them. A room now waits until the
  *     5x5 chunks around it are generated (rooms also write past the 3x3).
+ *     A dungeon's layout and entrance tower, built once the chunk at its
+ *     position is scheduled, likewise wait for the 5x5 around it.
  * Only timing changes: the check, spawn or room happens once the chunk
  * exists. Toggles: /ferrite compat <name>|all on|off|status,
  * -Dferrite.compat.<name>=false.

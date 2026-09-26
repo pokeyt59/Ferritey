@@ -415,9 +415,14 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   counts one of those chunks as loaded only once it and its eight
   neighbours are generated. A room then waits until the 5×5 chunks
   around it exist, because rooms also write blocks past the 3×3 (a room
-  fill reading a block entity there generated a chunk on the bench). A
-  room that reaches further than two chunks can still make the server
-  wait.
+  fill reading a block entity there generated a chunk on the bench).
+  The dungeon gate (`isChunkLoaded`, `Level.hasChunk` at the dungeon's
+  position, whose only caller is `RoguelikeState.getLoadedDungeons`)
+  gets the same 5×5 rule before the layout and entrance tower are built.
+  Roguelike checks both gates on the tick after any chunk loads
+  (`flagForGenerationCheck`), so a waiting dungeon or room is checked
+  again as its chunks load. Anything that reaches further than two
+  chunks can still make the server wait.
 - **Lithostitched.** Its structure attribute handler runs every 5 ticks
   for each player. It skips players whose chunk `ServerLevel.isLoaded`
   says is not loaded, then looks up the structure at the player's

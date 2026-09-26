@@ -23,8 +23,13 @@ import net.minecraft.world.level.Level;
  * fill reading a block entity there), and that generated the chunk too.
  * Roguelike checks its rooms on the tick after any chunk loads
  * (RoguelikeState.flagForGenerationCheck), so a waiting room is checked
- * again when the chunks it waits for load. Applies only with Roguelike
- * Dungeons installed.
+ * again when the chunks it waits for load.
+ *
+ * A dungeon's layout and entrance tower are built once isChunkLoaded
+ * (hasChunk at the dungeon's position, its only caller being that gate)
+ * passes; the tower then generated the chunks it was built into. That
+ * gate gets the same rule: the 5x5 chunks around the dungeon's chunk
+ * must be generated. Applies only with Roguelike Dungeons installed.
  */
 @Pseudo
 @Mixin(targets = "com.greymerk.roguelike.editor.WorldEditor")
@@ -32,10 +37,21 @@ public abstract class RoguelikeLoadedMixin {
 	@WrapOperation(method = "surroundingChunksLoaded", require = 0,
 			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;hasChunk(II)Z"))
 	private boolean ferrite$generated(Level level, int chunkX, int chunkZ, Operation<Boolean> original) {
+		return ferrite$generatedAround(level, chunkX, chunkZ, 1, original);
+	}
+
+	@WrapOperation(method = "isChunkLoaded", require = 0,
+			at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;hasChunk(II)Z"))
+	private boolean ferrite$dungeonGenerated(Level level, int chunkX, int chunkZ, Operation<Boolean> original) {
+		return ferrite$generatedAround(level, chunkX, chunkZ, 2, original);
+	}
+
+	/** hasChunk, and with the guard on, every chunk within radius of it generated. */
+	private static boolean ferrite$generatedAround(Level level, int chunkX, int chunkZ, int radius, Operation<Boolean> original) {
 		boolean has = original.call(level, chunkX, chunkZ);
 		if (!has || !ChunkWaitGuards.ROGUELIKE || !(level instanceof ServerLevel server)) return has;
-		for (int dx = -1; dx <= 1; dx++) {
-			for (int dz = -1; dz <= 1; dz++) {
+		for (int dx = -radius; dx <= radius; dx++) {
+			for (int dz = -radius; dz <= radius; dz++) {
 				if (!ChunkWaitGuards.generated(server, chunkX + dx, chunkZ + dz)) {
 					ChunkWaitGuards.roguelikeDeferred.increment();
 					return false;
