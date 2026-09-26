@@ -231,6 +231,12 @@ mods using defaults, dropping to 900 puts us before).
 that would silently produce wrong worldgen. Test must run before
 shipping the pairing.
 
+**Status with C2ME 0.4.2 (26.2):** tested on the CI players bench. It
+was not silent: C2ME's surface rule rewrite (priority 1100) made
+Ferrite's surface pruning fail the start. The overlapping Ferrite hooks
+now stand down when C2ME is loaded (see "Overlaps with common server
+mods"), and the server boots and generates with both.
+
 ### Volatile-shadow risk
 
 Some thread-safety-focused mods rewrite vanilla fields to be
@@ -402,7 +408,35 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   in the queue changed nothing, and asking for their neighbours at the
   same time made it worse. Pregenerating the world (Chunky) moves those
   stalls to the pregen run, and `/ferrite tickwatch 100` shows them in
-  `logs/ferrite.log`.
+  `logs/ferrite.log`. The room check itself
+  (`WorldEditor.surroundingChunksLoaded`) asked `Level.hasChunk`, which
+  is true once a chunk is scheduled, and then loaded the chunk. The
+  `roguelike` chunk-wait guard (`RoguelikeLoadedMixin`, `@Pseudo`) makes
+  it count only generated chunks, so a room waits for its chunks
+  instead. Blocks read beyond those chunks while a room is built (for
+  example by its mud filter) can still wait.
+- **Lithostitched.** Its structure attribute handler runs every 5 ticks
+  for each player. It skips players whose chunk `ServerLevel.isLoaded`
+  says is not loaded, then looks up the structure at the player's
+  position. `isLoaded` is true once a chunk is scheduled, so the lookup
+  made the server thread generate the player's chunk: 17-58 s for the
+  first player in fresh terrain on the players bench. The
+  `lithostitched` guard (`LithostitchedAttributeMixin`, `@Pseudo`) also
+  skips a player whose chunk is not generated yet. The check runs again
+  5 ticks later.
+- **Chunk-wait guards in vanilla code.** The cat spawner checks that the
+  chunks around its spot are scheduled, then reads a block there. The
+  `spawners` guard (`CatSpawnerChunkMixin`) skips a spot whose chunk is
+  not generated yet. All three guards are `require = 0` and share
+  `/ferrite compat` and `-Dferrite.compat.<name>=false`.
+- **C2ME.** C2ME 0.4.2 (26.2) rewrites the classes Ferrite's worldgen
+  hooks sit on, at mixin priority 1100, and Mixin will not inject into a
+  method a higher-priority mixin replaced, even with `require = 0`.
+  Before this was handled, the server did not start with both mods.
+  `FerriteMixinPlugin` now leaves those hooks out when C2ME is loaded
+  (`C2ME_OVERLAP_MIXINS`) and says so once in ferrite.log. Everything
+  else, including the chunk-wait guards, applies. The CI players bench
+  boots with C2ME and compares it with and without.
 - **Logging setups (Log4j).** Ferrite adds a Log4j logger config named
   `ferrite` at launch that sends its lines to `logs/ferrite.log` and only
   warnings and errors to the root logger's appenders (console,

@@ -23,6 +23,15 @@ marks pre-release research builds.
 - **Cramming above 2048 loaded mobs.** The overflow path cancelled vanilla
   without running a batch, so no mob in that dimension got cramming.
   Mobs now fall back to vanilla.
+- **The server would not start with C2ME.** C2ME (0.4.2 for 26.2)
+  replaces the game's surface rule sequence at mixin priority 1100, and
+  Mixin refuses to inject into a method another mixin has replaced,
+  whatever the injector's `require`. Ferrite's surface pruning then
+  failed the start. With C2ME loaded, the Ferrite worldgen hooks on code
+  C2ME rewrites now stand down, and C2ME's versions run: noise sampling,
+  lazy interpolation, the mapping memo, the height cache, the structure
+  template cache and surface pruning. Ferrite writes one line to
+  ferrite.log saying so. The CI players bench now boots with C2ME.
 
 ### Added
 - **Keep the server thread on a core of its own** (Linux, opt-in). On a
@@ -47,6 +56,46 @@ marks pre-release research builds.
   556 and 173 ms while Roguelike Dungeons built a dungeon on the server
   thread, placing blocks with neighbour updates and waiting on
   `ServerChunkCache.getChunkBlocking` for chunks around it to generate.
+  Stacks leave out MixinExtras' bridge frames and show 16 frames. With
+  C2ME, which wraps the chunk wait, the caller used to fall off the end
+  of the stack.
+- **Chunk-wait guards: some checks no longer generate chunks on the server
+  thread.** On the players bench (below), the longest freezes while
+  players explored came from code that checked only that a chunk was
+  loaded and then read it. In the game, a loaded chunk is one that has a
+  ticket and will be generated; it may not exist yet. Reading it then
+  makes the server thread generate it on the spot and wait. Three such
+  checks now also require the chunk to be generated, and otherwise try
+  again later:
+  - **Lithostitched.** Its structure attribute check
+    (`StructureAttributeHandler.tick`) runs every 5 ticks for each
+    player. It now skips a player whose chunk is not generated yet and
+    checks again 5 ticks later. It froze the server for 2-5 s at a time,
+    and for 17-58 s when the first player landed in fresh terrain.
+  - **Roguelike Dungeons.** It builds a room once the 3×3 chunks around
+    it are loaded. Its check (`WorldEditor.surroundingChunksLoaded`)
+    loaded them itself, with freezes of up to 7.5 s. It now counts only
+    generated chunks, so the room waits for them.
+  - **The cat spawner.** Once a minute it tries a spot 8-24 blocks from a
+    random player, after checking only that the chunks there are
+    scheduled. It now skips a spot whose chunk is not generated yet, the
+    same way it skips a spot that fails its placement check. One freeze
+    it caused was 8.5 s.
+
+  Only timing changes. Mixed explorers at the laptop model, with the
+  Lithostitched and Roguelike guards off, on, on, off:
+  - off-a: 47 ticks over 100 ms, 31.5 s in all, longest 5.3 s;
+  - on-a: 16 slow ticks, 3.4 s in all, longest 0.52 s;
+  - on-b: 19 slow ticks, 11.4 s in all. 8.5 s of that was one
+    cat-spawner freeze, the one the cat spawner guard now covers;
+  - off-b: 44 slow ticks, 15 s in all, longest 2.2 s.
+
+  Over the two "on" arms, the guards deferred Lithostitched 1,096 times
+  and Roguelike 1,279 times. `/ferrite compat
+  lithostitched|spawners|roguelike|all on|off` and `/ferrite compat
+  status`. Session only. `-Dferrite.compat.<name>=false` turns one off at
+  boot. The Lithostitched and Roguelike hooks are `@Pseudo` and do
+  nothing without those mods.
 
 ### Changed
 - **Ferrite logs to a file of its own.** Every Ferrite line now goes to
@@ -316,6 +365,47 @@ marks pre-release research builds.
   measured -0.1, +0.1 and +0.7 ms/tick over three runs, so it stays on
   with no consistent gain; the typed grid and the per-section collider
   skip measured within 0.2 ms.
+- Players bench at the 2× laptop model (180 s per scenario, view and
+  simulation distance 10, before the chunk-wait guards):
+
+  | Scenario | Chunks/s sent | Seconds with a hole within 2 chunks | Longest freeze | Freezes in all |
+  |---|---|---|---|---|
+  | walk | 8.8 | 10 | 1.2 s | 2.7 s |
+  | horse | 10.9 | 14 | 3.1 s | 6.0 s |
+  | elytra | 1.4 | 175 | 3.4 s | 21 s |
+  | boat | 1.3 | 178 | 3.6 s | 19 s |
+  | walker + rider + elytra | 0.5 / 0.5 / 1.9 | 177 each | 4.0 s | 15.5 s |
+
+  - **Walking and riding alone keep up.** Elytra and fast boats outrun
+    generation.
+  - **One flyer starves the others.** With a flyer in the mix, the
+    walker waited for terrain for 109 of 180 s. The workers spent about
+    580 ms of CPU per chunk actually sent. Most of that generation was
+    for chunks the flyer had already left.
+  - **Pregeneration.** An elytra over a pregenerated corridor received
+    51.7 and 50.8 chunks/s in two runs, with 1 s of holes in 60. Over
+    fresh terrain it received 1.6 and 3.6 chunks/s, with 57-60 s of
+    holes. The workers spent 18-19 ms per chunk loading from disk,
+    against 400-780 ms generating.
+  - **C2ME helps even at 2 cores.** C2ME 0.4.2 on the same mixed
+    scenario, each arm on a fresh world with the same seed, in the order
+    without, with, without, with:
+
+    | Arm | Chunks sent in 180 s | Walker / rider / elytra, chunks/s | Worker CPU per chunk sent | Walker waited |
+    |---|---|---|---|---|
+    | without | 307 | 0.4 / 0.3 / 0.9 | 726 ms | 133 s |
+    | with | 1,034 | 1.2 / 0.8 / 3.7 | 260 ms | 52 s |
+    | without | 332 | 0.3 / 0.3 / 1.2 | 713 ms | 130 s |
+    | with | 985 | 1.1 / 0.8 / 3.5 | 274 ms | 62 s |
+
+    An earlier single pair on another runner gave 3.4 times as many
+    chunks with C2ME. With C2ME, Ferrite's own worldgen hooks stand
+    down, so this compares the two worldgen paths. Freezes did not
+    change: they came from the checks the chunk-wait guards now cover,
+    with or without C2ME.
+  - **Simulation distance 6** made no clear difference.
+  - **Server core isolation** (`isolate-server-core`) sent fewer chunks:
+    0.3/s to the walker against 1.1/s. It did not shorten freezes.
 
 ### CI
 - Rust tests run on every push, and a headless dedicated-server smoke
@@ -359,6 +449,35 @@ marks pre-release research builds.
   of chunks prepared as the generator leaves them before it). The
   explore phases vary by about 10% from terrain alone, too much to see a
   few percent.
+- **Players bench** (commit tag `[players-bench]`, or
+  `[players-bench:a,b]` to run only some scenarios). It is a replica of a
+  small server while players explore:
+  - **Players.** `/ferrite bench players add <mode> <x> <z>
+    <heading>|clear|status` joins real `ServerPlayer`s through the player
+    list, like a client, on a connection with no socket. The server
+    loads, builds and sends their chunks and paces the sending by their
+    batch acknowledgements. It also tracks entities, spawns mobs and
+    ticks them around the players. The modes are walk (5.6 blocks/s),
+    horse (10), elytra (33) and boat (40). Walkers and riders wait for
+    terrain they have not been sent, as a client does.
+  - **Measures.** Per player: chunks sent, missing chunks within 5, and
+    seconds with a hole within 2. For the server: ticks over 100 ms with
+    their stacks (`/ferrite tickwatch`), and the worldgen workers' CPU
+    per chunk sent.
+  - **Mods and settings.** The server's own mods (worldgen mods plus
+    ServerCore, FerriteCore, Krypton, spark and Chunky;
+    `scripts/server-mods.txt`), at view and simulation distance 10.
+  - **Laptop-speed model.** A busy process on each CPU, at a nice level
+    bisected until the noise bench runs 2× slower than on the reference
+    runner (a 2-core, 4-thread laptop CPU). The report prints the factor
+    actually reached.
+  - **Scenarios.** Each start begins with a 60 s warm-up that is not
+    measured. The scenarios are walk, horse, elytra, boat, mixed (a
+    walker, a rider and an elytra flying apart), config (simulation
+    distance 6, server core isolation), c2me, pregen and compat.
+  - **Reports.** One report per scenario, plus a JFR recording.
+    `/ferrite bench distances <view> <sim>` sets both distances at run
+    time.
 
 ## [0.7.4-alpha] - 2026-09-07
 

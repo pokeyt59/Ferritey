@@ -26,7 +26,7 @@ import net.minecraft.server.MinecraftServer;
 public final class SlowTickWatchdog {
 	private SlowTickWatchdog() {}
 
-	private static final int FRAMES = 14;
+	private static final int FRAMES = 16;
 	private static Thread thread;
 	private static volatile boolean running;
 	private static volatile int thresholdMs;
@@ -83,12 +83,20 @@ public final class SlowTickWatchdog {
 		}
 	}
 
+	/**
+	 * The top FRAMES frames, without MixinExtras' bridge and wrapped-original
+	 * frames: they only pass the call on, and with a mod such as C2ME that
+	 * wraps the chunk wait they pushed the caller out of the report.
+	 */
 	private static String describe(StackTraceElement[] stack) {
 		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < Math.min(FRAMES, stack.length); i++) {
-			if (i > 0) sb.append(" < ");
+		int shown = 0;
+		for (int i = 0; i < stack.length && shown < FRAMES; i++) {
+			String method = stack[i].getMethodName();
+			if (method.startsWith("mixinextras$bridge$") || method.contains("$mixinextras$wrapped$")) continue;
+			if (shown++ > 0) sb.append(" < ");
 			String cls = stack[i].getClassName();
-			sb.append(cls.substring(cls.lastIndexOf('.') + 1)).append('.').append(stack[i].getMethodName());
+			sb.append(cls.substring(cls.lastIndexOf('.') + 1)).append('.').append(method);
 		}
 		return sb.toString();
 	}
