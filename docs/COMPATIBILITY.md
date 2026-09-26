@@ -429,9 +429,24 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   5 ticks later.
 - **Chunk-wait guards in vanilla code.** The cat spawner checks that the
   chunks around its spot are scheduled, then reads a block there. The
-  `spawners` guard (`CatSpawnerChunkMixin`) skips a spot whose chunk is
-  not generated yet. All three guards are `require = 0` and share
-  `/ferrite compat` and `-Dferrite.compat.<name>=false`.
+  phantom spawner reads the difficulty at each player's position
+  (`getCurrentDifficultyAt`, which asks for the chunk without loading it
+  but still waits for a scheduled one on the server thread), then a
+  block up to 10 blocks away. The `spawners` guard
+  (`CatSpawnerChunkMixin`, `PhantomSpawnerChunkMixin`) skips a spot, or
+  a player for that attempt, when a chunk it would read is not generated
+  yet. For the phantom spawner, the skip returns a peaceful
+  difficulty, which fails the spawner's difficulty roll. All the guards
+  are `require = 0` and share `/ferrite compat` and
+  `-Dferrite.compat.<name>=false`.
+- **C2ME and block entity comparator updates.** With C2ME, the first
+  player into fresh terrain froze the server once for 4.4-5.5 s, in two
+  of two C2ME starts. A trial spawner's `setChanged` called
+  `updateNeighbourForOutputSignal`, which read a block in a neighbouring
+  chunk that was not generated yet. The game ticks a block entity only
+  once the chunks around it are full, so this looks like a difference
+  in C2ME's chunk system. Ferrite does not guard it: skipping a
+  comparator update would change redstone, not only timing.
 - **C2ME.** C2ME 0.4.2 (26.2) rewrites the classes Ferrite's worldgen
   hooks sit on, at mixin priority 1100, and Mixin will not inject into a
   method a higher-priority mixin replaced, even with `require = 0`.

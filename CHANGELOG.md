@@ -64,7 +64,7 @@ marks pre-release research builds.
   players explored came from code that checked only that a chunk was
   loaded and then read it. In the game, a loaded chunk is one that has a
   ticket and will be generated; it may not exist yet. Reading it then
-  makes the server thread generate it on the spot and wait. Three such
+  makes the server thread generate it on the spot and wait. Four such
   checks now also require the chunk to be generated, and otherwise try
   again later:
   - **Lithostitched.** Its structure attribute check
@@ -82,17 +82,31 @@ marks pre-release research builds.
     scheduled. It now skips a spot whose chunk is not generated yet, the
     same way it skips a spot that fails its placement check. One freeze
     it caused was 8.5 s.
+  - **The phantom spawner.** Every 60-120 s at night it reads the
+    difficulty at each player's position, then a block up to 10 blocks
+    away. The difficulty lookup does not load chunks, but on the server
+    thread it still waits for a scheduled one. A player with a chunk
+    there not generated yet is now skipped until the next attempt. One
+    freeze it caused was 1.5 s.
 
-  Only timing changes. Mixed explorers at the laptop model, with the
-  Lithostitched and Roguelike guards off, on, on, off:
-  - off-a: 47 ticks over 100 ms, 31.5 s in all, longest 5.3 s;
-  - on-a: 16 slow ticks, 3.4 s in all, longest 0.52 s;
-  - on-b: 19 slow ticks, 11.4 s in all. 8.5 s of that was one
-    cat-spawner freeze, the one the cat spawner guard now covers;
-  - off-b: 44 slow ticks, 15 s in all, longest 2.2 s.
+  Only timing changes. On the players bench, three players explored
+  (walker, rider, elytra) at the laptop model, with the guards off, on,
+  on, off:
 
-  Over the two "on" arms, the guards deferred Lithostitched 1,096 times
-  and Roguelike 1,279 times. `/ferrite compat
+  | Guards | Ticks over 100 ms | Freezes in all | Longest |
+  |---|---|---|---|
+  | off | 43 | 34.4 s | 5.5 s |
+  | on | 19 | 4.1 s | 0.9 s |
+  | on | 13 | 2.2 s | 0.36 s |
+  | off | 36 | 13.1 s | 1.7 s |
+
+  That run had the Lithostitched, Roguelike and cat spawner guards. In
+  the "on" arms, none of the longest freezes waited for a chunk; the
+  longest was chunk saving at unload. Two earlier runs, with fewer
+  guards, went the same way: 31.5 and 15 s off against 3.4 and 11.4 s
+  on, then 29.6 and 21.6 s off against 4.4 and 2.5 s on. Chunks sent
+  and mobs near the players (walker 57-89, rider 21-91) varied with the
+  terrain, not with the guards. `/ferrite compat
   lithostitched|spawners|roguelike|all on|off` and `/ferrite compat
   status`. Session only. `-Dferrite.compat.<name>=false` turns one off at
   boot. The Lithostitched and Roguelike hooks are `@Pseudo` and do
@@ -400,10 +414,11 @@ marks pre-release research builds.
     | with | 985 | 1.1 / 0.8 / 3.5 | 274 ms | 62 s |
 
     An earlier single pair on another runner gave 3.4 times as many
-    chunks with C2ME. With C2ME, Ferrite's own worldgen hooks stand
-    down, so this compares the two worldgen paths. Freezes did not
-    change: they came from the checks the chunk-wait guards now cover,
-    with or without C2ME.
+    chunks with C2ME. A later run with the chunk-wait guards on gave
+    329 and 412 chunks without C2ME, and 1,143 and 1,134 with it. There,
+    no freeze in any of the four arms was longer than 0.21 s. With C2ME,
+    Ferrite's own worldgen hooks stand down, so this compares the two
+    worldgen paths. C2ME did not change the freezes; the guards did.
   - **Simulation distance 6** made no clear difference.
   - **Server core isolation** (`isolate-server-core`) sent fewer chunks:
     0.3/s to the walker against 1.1/s. It did not shorten freezes.
