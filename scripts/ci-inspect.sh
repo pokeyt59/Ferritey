@@ -66,7 +66,9 @@ done
 	echo
 	echo "######## $cls  ($jar)"
 	[ -n "$jar" ] || { echo "class not found"; continue; }
-	javap -c -p -classpath "$jar" "$cls" | awk -v re="$methods" '
+	# The regex goes through the environment: awk -v would turn "\$" into "$".
+	javap -c -p -classpath "$jar" "$cls" | re="$methods" awk '
+		BEGIN { re = ENVIRON["re"] }
 		/^  [^ ]/ {
 			if ($0 !~ /\(/) { print; next }   # fields: always shown, for names and types
 			show = ($0 ~ ("[ .](" re ")\\("))
