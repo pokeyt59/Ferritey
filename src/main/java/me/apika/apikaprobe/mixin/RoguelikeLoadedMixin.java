@@ -3,9 +3,8 @@ package me.apika.apikaprobe.mixin;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
@@ -22,7 +21,10 @@ import net.minecraft.world.level.Level;
  * generated, so the room waits until the 5x5 chunks around it exist.
  * Rooms also write blocks past the 3x3 (the players bench caught a room
  * fill reading a block entity there), and that generated the chunk too.
- * Applies only with Roguelike Dungeons installed.
+ * Roguelike checks its rooms on the tick after any chunk loads
+ * (RoguelikeState.flagForGenerationCheck), so a waiting room is checked
+ * again when the chunks it waits for load. Applies only with Roguelike
+ * Dungeons installed.
  */
 @Pseudo
 @Mixin(targets = "com.greymerk.roguelike.editor.WorldEditor")
@@ -44,8 +46,9 @@ public abstract class RoguelikeLoadedMixin {
 	}
 
 	/** Rooms whose check passed, so the bench can see rooms still get built. */
-	@Inject(method = "surroundingChunksLoaded", at = @At("RETURN"), require = 0)
-	private void ferrite$countReady(CallbackInfoReturnable<Boolean> cir) {
-		if (cir.getReturnValueZ()) ChunkWaitGuards.roguelikeReady.increment();
+	@ModifyReturnValue(method = "surroundingChunksLoaded", at = @At("RETURN"), require = 0)
+	private boolean ferrite$countReady(boolean ready) {
+		if (ready) ChunkWaitGuards.roguelikeReady.increment();
+		return ready;
 	}
 }
