@@ -19,10 +19,9 @@ import net.minecraft.server.level.ServerLevel;
  *     each player stands in (structure attributes). It skips players whose
  *     chunk is not loaded, but "loaded" there means scheduled; now it also
  *     skips a player whose chunk is not generated yet.
- *   - spawning: natural spawning may place a mob pack across into a
- *     neighbouring chunk the game allows spawning in; a neighbour that is
- *     not generated yet is now treated like one where spawning is not
- *     allowed, instead of being generated for the spawn attempt.
+ *   - spawners: once a minute the cat spawner tries a spot 8-24 blocks
+ *     from a random player, having checked only that its chunks are
+ *     scheduled; a spot whose chunk is not generated yet is now skipped.
  *   - roguelike: Roguelike Dungeons builds rooms whose surrounding chunks
  *     are loaded; its check loaded them. It now counts only generated ones.
  * Only timing changes: the check, spawn or room happens once the chunk
@@ -33,11 +32,11 @@ public final class ChunkWaitGuards {
 	private ChunkWaitGuards() {}
 
 	public static volatile boolean LITHOSTITCHED = on("lithostitched");
-	public static volatile boolean SPAWNING = on("spawning");
+	public static volatile boolean SPAWNERS = on("spawners");
 	public static volatile boolean ROGUELIKE = on("roguelike");
 
 	public static final LongAdder lithostitchedDeferred = new LongAdder();
-	public static final LongAdder spawnRejected = new LongAdder();
+	public static final LongAdder spawnerSkipped = new LongAdder();
 	public static final LongAdder roguelikeDeferred = new LongAdder();
 
 	private static boolean on(String name) {
@@ -53,11 +52,11 @@ public final class ChunkWaitGuards {
 	public static boolean set(String name, boolean on) {
 		switch (name) {
 			case "lithostitched" -> LITHOSTITCHED = on;
-			case "spawning" -> SPAWNING = on;
+			case "spawners" -> SPAWNERS = on;
 			case "roguelike" -> ROGUELIKE = on;
 			case "all" -> {
 				LITHOSTITCHED = on;
-				SPAWNING = on;
+				SPAWNERS = on;
 				ROGUELIKE = on;
 			}
 			default -> {
@@ -68,9 +67,9 @@ public final class ChunkWaitGuards {
 	}
 
 	public static String status() {
-		return String.format("[compat] lithostitched=%s (deferred %d) spawning=%s (rejected %d) roguelike=%s (deferred %d)",
+		return String.format("[compat] lithostitched=%s (deferred %d) spawners=%s (skipped %d) roguelike=%s (deferred %d)",
 				LITHOSTITCHED ? "on" : "off", lithostitchedDeferred.sum(),
-				SPAWNING ? "on" : "off", spawnRejected.sum(),
+				SPAWNERS ? "on" : "off", spawnerSkipped.sum(),
 				ROGUELIKE ? "on" : "off", roguelikeDeferred.sum());
 	}
 }

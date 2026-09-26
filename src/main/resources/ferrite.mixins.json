@@ -85,7 +85,7 @@
 		"ClimateRiversBiomeFoldMixin",
 		"ClimateRiversBiomeCheckMixin",
 		"LithostitchedAttributeMixin",
-		"NaturalSpawnerNeighbourMixin",
+		"CatSpawnerChunkMixin",
 		"RoguelikeLoadedMixin"
 	],
 	"injectors": {

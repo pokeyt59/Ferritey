@@ -2254,11 +2254,11 @@ public final class FerriteCommand {
 		return Command.SINGLE_SUCCESS;
 	}
 
-	/** /ferrite compat lithostitched|spawning|roguelike|all on|off: ChunkWaitGuards. */
+	/** /ferrite compat lithostitched|spawners|roguelike|all on|off: ChunkWaitGuards. */
 	private static int setCompatGuard(CommandContext<CommandSourceStack> ctx, boolean on) {
 		String name = StringArgumentType.getString(ctx, "guard");
 		if (!me.apika.apikaprobe.compat.ChunkWaitGuards.set(name, on)) {
-			sendFeedback(ctx, "[compat] unknown guard " + name + " (lithostitched, spawning, roguelike, all)", false);
+			sendFeedback(ctx, "[compat] unknown guard " + name + " (lithostitched, spawners, roguelike, all)", false);
 			return 0;
 		}
 		sendFeedback(ctx, me.apika.apikaprobe.compat.ChunkWaitGuards.status(), true);
