@@ -3,6 +3,8 @@ package me.apika.apikaprobe.mixin;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -39,5 +41,11 @@ public abstract class RoguelikeLoadedMixin {
 			}
 		}
 		return true;
+	}
+
+	/** Rooms whose check passed, so the bench can see rooms still get built. */
+	@Inject(method = "surroundingChunksLoaded", at = @At("RETURN"), require = 0)
+	private void ferrite$countReady(CallbackInfoReturnable<Boolean> cir) {
+		if (cir.getReturnValueZ()) ChunkWaitGuards.roguelikeReady.increment();
 	}
 }
