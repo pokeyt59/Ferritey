@@ -22,8 +22,9 @@ import net.minecraft.server.level.ServerLevel;
  *   - spawners: once a minute the cat spawner tries a spot 8-24 blocks
  *     from a random player, having checked only that its chunks are
  *     scheduled; a spot whose chunk is not generated yet is now skipped.
- *   - roguelike: Roguelike Dungeons builds rooms whose surrounding chunks
- *     are loaded; its check loaded them. It now counts only generated ones.
+ *   - roguelike: Roguelike Dungeons builds rooms whose surrounding 3x3
+ *     chunks are loaded; its check loaded them. A room now waits until the
+ *     5x5 chunks around it are generated (rooms also write past the 3x3).
  * Only timing changes: the check, spawn or room happens once the chunk
  * exists. Toggles: /ferrite compat <name>|all on|off|status,
  * -Dferrite.compat.<name>=false.
