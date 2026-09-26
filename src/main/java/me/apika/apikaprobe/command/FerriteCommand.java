@@ -321,7 +321,42 @@ public final class FerriteCommand {
 																.then(Commands.argument("z2", IntegerArgumentType.integer())
 																		.executes(FerriteCommand::exploreBenchAdd))))))
 								.then(Commands.literal("status").executes(FerriteCommand::exploreBenchStatus))
-								.then(Commands.literal("reset").executes(FerriteCommand::exploreBenchReset))))
+								.then(Commands.literal("reset").executes(FerriteCommand::exploreBenchReset)))
+						.then(Commands.literal("players")
+								.then(Commands.literal("add")
+										.then(Commands.argument("mode", StringArgumentType.word())
+												.then(Commands.argument("x", IntegerArgumentType.integer())
+														.then(Commands.argument("z", IntegerArgumentType.integer())
+																.then(Commands.argument("heading", IntegerArgumentType.integer(-360, 360))
+																		.executes(ctx -> {
+																			sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.add(
+																					ctx.getSource().getServer(), ctx.getSource().getLevel(),
+																					StringArgumentType.getString(ctx, "mode"),
+																					IntegerArgumentType.getInteger(ctx, "x"),
+																					IntegerArgumentType.getInteger(ctx, "z"),
+																					IntegerArgumentType.getInteger(ctx, "heading")), false);
+																			return Command.SINGLE_SUCCESS;
+																		}))))))
+								.then(Commands.literal("clear").executes(ctx -> {
+									sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.clear(ctx.getSource().getServer()), false);
+									return Command.SINGLE_SUCCESS;
+								}))
+								.then(Commands.literal("status").executes(ctx -> {
+									sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.status(), false);
+									return Command.SINGLE_SUCCESS;
+								})))
+						// View and simulation distance for the running server, as server.properties would set them.
+						.then(Commands.literal("distances")
+								.then(Commands.argument("view", IntegerArgumentType.integer(2, 32))
+										.then(Commands.argument("simulation", IntegerArgumentType.integer(2, 32))
+												.executes(ctx -> {
+													int view = IntegerArgumentType.getInteger(ctx, "view");
+													int sim = IntegerArgumentType.getInteger(ctx, "simulation");
+													ctx.getSource().getServer().getPlayerList().setViewDistance(view);
+													ctx.getSource().getServer().getPlayerList().setSimulationDistance(sim);
+													sendFeedback(ctx, "[bench] view-distance " + view + ", simulation-distance " + sim, false);
+													return Command.SINGLE_SUCCESS;
+												})))))
 				.then(Commands.literal("pregen")
 						.then(Commands.argument("radius", IntegerArgumentType.integer(1, 50))
 								.executes(FerriteCommand::pregenStart))

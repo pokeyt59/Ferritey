@@ -4,6 +4,7 @@
 Usage:
   worldgen-drive.py <port> <password> baseline <samples>
   worldgen-drive.py <port> <password> explore <start-chunk-x> <width> <step-seconds> <duration-seconds> [label]
+  worldgen-drive.py <port> <password> players <label> <duration-seconds> <mode:x:z:heading>...
 
 baseline: samples /tick query every 5 s and prints tick-time stats.
 
@@ -16,6 +17,13 @@ the server thread). After <duration> it stops advancing and waits (up to
 DRAIN_MAX s) for the backlog to finish. Prints tick-time stats while
 exploring, chunks delivered per second, request-to-loaded latency, and
 the backlog of requested chunks not yet loaded.
+
+players: joins bench players (/ferrite bench players add, FakeExplorers.java),
+one per "mode:x:z:heading" (walk, horse, elytra, boat; block coordinates;
+heading as Minecraft yaw, -90 = east), lets them travel for <duration>,
+samples /tick query every 5 s meanwhile, then prints tick-time stats,
+each player's chunks sent, holes near it and time spent waiting for
+terrain, the worldgen workers' CPU per chunk sent, and removes them.
 """
 import re
 import socket
@@ -164,6 +172,37 @@ def explore(r, start, width, step, duration, label=""):
         sys.exit("no chunk finished generating")
 
 
+PLAYER = re.compile(r"chunks_sent=(\d+)")
+
+
+def players(r, label, duration, specs):
+    tag = f"[{label}] "
+    r.cmd("ferrite bench players clear")
+    cpu0 = status(r)[6]
+    for spec in specs:
+        mode, x, z, heading = spec.split(":")
+        print(tag + r.cmd(f"ferrite bench players add {mode} {x} {z} {heading}").strip())
+    samples = []
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < duration:
+        time.sleep(5)
+        samples.append(tick_query(r))
+    out = r.cmd("ferrite bench players status")
+    cpu1 = status(r)[6]
+    summarize(f"{tag}players", samples)
+    for line in out.strip().splitlines():
+        print(tag + line)
+    sent = sum(int(m) for m in PLAYER.findall(out.split("total")[0]))
+    if sent and cpu0 >= 0:
+        print(f"{tag}worldgen worker cpu: {cpu1 - cpu0} ms, {(cpu1 - cpu0) / sent:.1f} ms per chunk sent")
+    for kind, t in sorted(r.times.items()):
+        print(f"{tag}rcon round trip '{kind}': n={len(t)} median {statistics.median(t) * 1000:.0f} ms "
+              f"max {max(t) * 1000:.0f} ms")
+    print(tag + r.cmd("ferrite bench players clear").strip())
+    if sent == 0:
+        sys.exit("no chunk was sent to any player")
+
+
 def main():
     port, password, mode = int(sys.argv[1]), sys.argv[2], sys.argv[3]
     r = Rcon(port, password)
@@ -177,6 +216,8 @@ def main():
     elif mode == "explore":
         explore(r, int(sys.argv[4]), int(sys.argv[5]), float(sys.argv[6]), float(sys.argv[7]),
                 sys.argv[8] if len(sys.argv) > 8 else "")
+    elif mode == "players":
+        players(r, sys.argv[4], float(sys.argv[5]), sys.argv[6:])
     else:
         sys.exit(f"unknown mode {mode}")
 
