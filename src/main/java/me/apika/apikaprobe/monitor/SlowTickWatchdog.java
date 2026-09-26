@@ -102,7 +102,7 @@ public final class SlowTickWatchdog {
 			sb.append(" | ").append(e.getValue()).append("x ").append(e.getKey());
 		}
 		String line = sb.toString();
-		ExampleMod.LOGGER.warn(line);
+		ExampleMod.LOGGER.info(line);
 		synchronized (SlowTickWatchdog.class) {
 			reports++;
 			recent.add(line);

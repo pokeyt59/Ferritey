@@ -17,6 +17,8 @@
 set -euo pipefail
 
 LOG=worldgen-server.log
+# Ferrite's own log; the console ($LOG) keeps only its warnings and errors.
+FLOG=run/logs/ferrite.log
 REPORT=worldgen-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-worldgen
@@ -53,6 +55,8 @@ PID=$!
 fail() {
 	echo "::error::$1"
 	tail -n 150 "$LOG"
+	echo "--- ferrite.log"
+	tail -n 60 "$FLOG" 2>/dev/null || true
 	kill "$PID" 2>/dev/null || true
 	exit 1
 }
@@ -72,7 +76,7 @@ rcon() { python3 scripts/rcon.py "$RCON_PORT" "$RCON_PASSWORD" "$@"; }
 wait_for 'Done (' 1800
 wait_for 'RCON running' 60
 : > "$REPORT"
-grep -E '\[hw\]|lean mode' "$LOG" | tee -a "$REPORT" || true
+grep -E '\[hw\]|lean mode' "$FLOG" | tee -a "$REPORT" || true
 echo "=== mods loaded ==="
 sed -n '/Loading [0-9]* mods/,/^\[/p' "$LOG" | head -150
 
@@ -111,6 +115,7 @@ rcon "ferrite bench surface 24 8" "ferrite worldgen surface-prune status" | tee 
 # Setup (the pen's forceload) stalls the server by design; only later
 # "Can't keep up" warnings are reported.
 measured_from=$(wc -l < "$LOG")
+fmeasured_from=$(wc -l < "$FLOG")
 python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" baseline 6 | tee -a "$REPORT"
 
 
@@ -169,6 +174,8 @@ jcmd "$GAME_PID" JFR.stop name=whole > /dev/null || true
 rcon "stop" > /dev/null || true
 wait "$PID" || true
 FIRST_LOG=$LOG
+# A second start rolls ferrite.log over; keep this start's copy.
+cp "$FLOG" worldgen-ferrite.log
 
 # --- Second start ---------------------------------------------------------------
 # Structure templates were upgraded (DataFixerUpper) and cached during the
@@ -206,7 +213,7 @@ echo "=== server log: ticks running behind ==="
 tail -n +"$((measured_from + 1))" "$LOG" | grep -E "Can't keep up|ticks behind" | tail -20 | tee -a "$REPORT" || true
 
 echo "=== slow ticks while exploring (tick watchdog) ===" | tee -a "$REPORT"
-tail -n +"$((measured_from + 1))" "$LOG" | grep -F "[slow-tick]" | cut -c1-2500 | head -20 | tee -a "$REPORT" || true
+tail -n +"$((fmeasured_from + 1))" worldgen-ferrite.log | grep -F "[slow-tick]" | cut -c1-2500 | head -20 | tee -a "$REPORT" || true
 
 echo "=== worldgen report ==="
 cat "$REPORT" | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"

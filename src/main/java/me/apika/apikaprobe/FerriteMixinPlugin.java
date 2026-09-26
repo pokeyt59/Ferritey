@@ -17,6 +17,8 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 import net.fabricmc.loader.api.FabricLoader;
 
+import me.apika.apikaprobe.monitor.FerriteLogFile;
+
 public class FerriteMixinPlugin implements IMixinConfigPlugin {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger("ferrite");
@@ -72,6 +74,11 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 	@Override
 	public void onLoad(String mixinPackage) {
 		FabricLoader loader = FabricLoader.getInstance();
+		Path savedConfig = loader.getConfigDir().resolve("ferrite.properties");
+		// Ferrite's own log file, before anything else here logs.
+		String logFile = System.getProperty(FerriteLogFile.PROPERTY);
+		if (logFile == null || logFile.isEmpty()) logFile = readSaved(savedConfig, "log-file");
+		FerriteLogFile.install(loader.getGameDir(), logFile == null || Boolean.parseBoolean(logFile));
 		this.moonrise = loader.isModLoaded("moonrise");
 		this.navParity = Boolean.parseBoolean(System.getProperty("ferrite.nav.parity", "false"));
 		this.physicsHooks = Boolean.getBoolean("ferrite.physics.hooks");
@@ -80,7 +87,7 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 
 		String reason;
 		String prop = System.getProperty("ferrite.diagnostics");
-		String saved = readSavedDiagnostics(loader.getConfigDir().resolve("ferrite.properties"));
+		String saved = readSaved(savedConfig, "diagnostics");
 		if (prop != null && !prop.isEmpty()) {
 			diagnostics = Boolean.parseBoolean(prop);
 			reason = "-Dferrite.diagnostics";
@@ -101,7 +108,7 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 	}
 
 	/** Plain Properties read: FerriteConfig pulls in game classes, too early here. */
-	private static String readSavedDiagnostics(Path file) {
+	private static String readSaved(Path file, String key) {
 		if (!Files.isRegularFile(file)) return null;
 		Properties props = new Properties();
 		try (Reader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
@@ -109,7 +116,7 @@ public class FerriteMixinPlugin implements IMixinConfigPlugin {
 		} catch (IOException | IllegalArgumentException e) {
 			return null;
 		}
-		return props.getProperty("diagnostics");
+		return props.getProperty(key);
 	}
 
 	@Override

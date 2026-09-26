@@ -28,7 +28,7 @@ Natives bundled for Windows x86_64, Linux x86_64, Linux aarch64 (tested on a Ras
 
 ## How to help
 
-Play 10+ minutes with mob farms or crowded worlds, search `latest.log` for `[ferrite]`, and share the `[cramming-dispatch]` and `[entity-tick]` lines in a GitHub issue. Low-end hardware reports are especially useful.
+Play 10+ minutes with mob farms or crowded worlds, open `logs/ferrite.log` (Ferrite's own log), and share the `[cramming-dispatch]` and `[entity-tick]` lines in a GitHub issue. Low-end hardware reports are especially useful.
 
 Full measurement tables, methodology, and source: [github.com/VoiceLessQ/Ferrite](https://github.com/VoiceLessQ/Ferrite)
 

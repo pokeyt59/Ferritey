@@ -204,6 +204,7 @@ jobs:
           path: |
             server-smoke.log
             run/logs/latest.log
+            run/logs/ferrite.log
           if-no-files-found: ignore
 
   # Prints javap bytecode of the vanilla methods in scripts/inspect-targets.txt
@@ -279,6 +280,7 @@ jobs:
             bench-hot.txt
             bench-server.log
             run/logs/latest.log
+            run/logs/ferrite.log
             bench.jfr
             hot-*.txt
           if-no-files-found: ignore
@@ -329,6 +331,8 @@ jobs:
             worldgen-server.log
             worldgen-server-2.log
             run/logs/latest.log
+            run/logs/ferrite.log
+            worldgen-ferrite.log
             worldgen.jfr
           if-no-files-found: ignore
 

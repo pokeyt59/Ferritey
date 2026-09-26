@@ -49,6 +49,18 @@ marks pre-release research builds.
   `ServerChunkCache.getChunkBlocking` for chunks around it to generate.
 
 ### Changed
+- **Ferrite logs to a file of its own.** Every Ferrite line now goes to
+  `logs/ferrite.log`, rolled over at each start like `latest.log`, and
+  the main log (`latest.log` and the console) keeps only Ferrite's
+  warnings and errors, plus one line at startup saying where the rest
+  went. The routing is a Log4j logger config added at launch, so no
+  line is lost and nothing else in the log changes. `/ferrite log file
+  off` (saved), `log-file=false` in `config/ferrite.properties` or
+  `-Dferrite.log.file=false` puts everything back in the main log. Three
+  routine lines move from warning to info, so they stay in ferrite.log:
+  `[slow-tick]` reports from `/ferrite tickwatch`, and the cramming and
+  physics notices that a batch was too big and ran vanilla. The leftover
+  "Hello Fabric world!" line is gone.
 - **Noise router mapped once per node.** Every `NoiseChunk` (one per
   chunk, one per terrain height query) maps the whole noise router
   through its wrap visitor. The router is a graph: datapack functions
@@ -283,7 +295,10 @@ marks pre-release research builds.
 ### CI
 - Rust tests run on every push, and a headless dedicated-server smoke
   test boots the mod in full and lean mode, fails on mixin errors, and
-  checks cramming damage in the Overworld and the Nether.
+  checks cramming damage in the Overworld and the Nether. It also checks
+  that Ferrite's lines land in `run/logs/ferrite.log` and that the
+  console gets none of its info lines. The server jobs read Ferrite's
+  lines from ferrite.log and upload it with their logs.
 - **Benchmark job** (commit tag `[bench]` or a manual run): a dedicated
   server with Lithium, 1000 husks (a spread pen and a 200-mob pile), 60
   villagers and a parked boat, measured with `/tick query` over

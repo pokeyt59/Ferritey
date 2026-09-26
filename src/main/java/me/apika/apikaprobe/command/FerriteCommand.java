@@ -69,7 +69,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * All subcommands require op-level 2. Logs to both the command feedback
  * channel (visible in chat) and the [ferrite] logger (visible in
- * latest.log alongside the phase monitor lines) so comparative runs
+ * ferrite.log alongside the phase monitor lines) so comparative runs
  * are easy to correlate after the fact.
  */
 public final class FerriteCommand {
@@ -408,6 +408,10 @@ public final class FerriteCommand {
 								.then(Commands.literal("on").executes(FerriteCommand::logMonitorsOn))
 								.then(Commands.literal("off").executes(FerriteCommand::logMonitorsOff))
 								.then(Commands.literal("status").executes(FerriteCommand::logMonitorsStatus)))
+						.then(Commands.literal("file")
+								.then(Commands.literal("on").executes(ctx -> logFile(ctx, true)))
+								.then(Commands.literal("off").executes(ctx -> logFile(ctx, false)))
+								.then(Commands.literal("status").executes(FerriteCommand::logFileStatus)))
 						.then(Commands.literal("status").executes(FerriteCommand::logCategoryStatus))
 						.then(Commands.argument("category", StringArgumentType.word())
 								.then(Commands.literal("on").executes(FerriteCommand::logCategoryOn))
@@ -443,7 +447,7 @@ public final class FerriteCommand {
 
 	private static int statusCramming(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
 		String msg = String.format(
-			"[cramming] ENABLED=%s native=%s  (watch [cramming-dispatch] in latest.log for batch counts)",
+			"[cramming] ENABLED=%s native=%s  (watch [cramming-dispatch] in ferrite.log for batch counts)",
 			CrammingDispatcher.ENABLED,
 			RustBridge.NATIVE_AVAILABLE ? "available" : "MISSING");
 		sendFeedback(ctx, msg, false);
@@ -629,7 +633,7 @@ public final class FerriteCommand {
 
 	private static int redstoneBench(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
 		int[] sizes = {100, 1000, 10000};
-		sendFeedback(ctx, "[redstone-bench] running (see latest.log for full results)", false);
+		sendFeedback(ctx, "[redstone-bench] running (see ferrite.log for full results)", false);
 		ExampleMod.LOGGER.info("[redstone-bench] Phase 1 priority queue bench — gate: Rust ≥2× Java at N≥1000");
 		boolean gateMet = false;
 		for (int n : sizes) {
@@ -654,7 +658,7 @@ public final class FerriteCommand {
 
 	private static int statusAc(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
 		String msg = String.format(
-				"[redstone] ac ENABLED=%s update-order=%s  (watch latest.log for [redstone] phase numbers every 5s)",
+				"[redstone] ac ENABLED=%s update-order=%s  (watch ferrite.log for [redstone] phase numbers every 5s)",
 				FerriteWireConfig.ENABLED,
 				FerriteWireConfig.UPDATE_ORDER.id());
 		sendFeedback(ctx, msg, false);
@@ -718,7 +722,7 @@ public final class FerriteCommand {
 		// Per-type breakdown — log only (chat would spam)
 		ExampleMod.LOGGER.info("[surface] node type counts:");
 		stats.forEach((name, count) -> ExampleMod.LOGGER.info("[surface]   {} = {}", name, count));
-		sendFeedback(ctx, "[surface] full breakdown in latest.log under [surface]", false);
+		sendFeedback(ctx, "[surface] full breakdown in ferrite.log under [surface]", false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -735,7 +739,7 @@ public final class FerriteCommand {
 	 * returns-null falls through to vanilla as a safety net. Requires
 	 * a compiled tree installed first via /ferrite surface validate.
 	 *
-	 * <p>Watch [surface-phase] in latest.log for the per-phase timing
+	 * <p>Watch [surface-phase] in ferrite.log for the per-phase timing
 	 * delta (the tryApply slot specifically) when toggling on/off.
 	 * That's the perf signal for whether the bytecode evaluator beats
 	 * vanilla's tree walk on the same workload.
@@ -934,7 +938,7 @@ public final class FerriteCommand {
 	 * The next mismatch the validator sees gets a full opcode trace dump
 	 * to {@code [surface-validate]} log lines, then the flag clears
 	 * itself. Workflow: arm, teleport into a chunk-gen-active area, hit
-	 * a mismatch, read the trace from latest.log to pinpoint which
+	 * a mismatch, read the trace from ferrite.log to pinpoint which
 	 * condition diverged.
 	 */
 	/**
@@ -997,7 +1001,7 @@ public final class FerriteCommand {
 			java.util.List<String> entry = table[i];
 			ExampleMod.LOGGER.info("[surface-dump]   set #{} ({} biomes): {}", i, entry.size(), entry);
 		}
-		sendFeedback(ctx, "[surface-dump] full breakdown in latest.log under [surface-dump]", false);
+		sendFeedback(ctx, "[surface-dump] full breakdown in ferrite.log under [surface-dump]", false);
 		return Command.SINGLE_SUCCESS;
 	}
 
@@ -1007,7 +1011,7 @@ public final class FerriteCommand {
 			return 0;
 		}
 		SurfaceValidator.traceNextMismatch = true;
-		String msg = "[surface-validate] armed: next mismatch will dump full opcode trace to latest.log";
+		String msg = "[surface-validate] armed: next mismatch will dump full opcode trace to ferrite.log";
 		sendFeedback(ctx, msg, false);
 		ExampleMod.LOGGER.info(msg);
 		return Command.SINGLE_SUCCESS;
@@ -1703,7 +1707,7 @@ public final class FerriteCommand {
 		}
 		int total = (2 * radius + 1) * (2 * radius + 1);
 		String msg = String.format(
-				"[pregen] started @ chunk (%d, %d) radius=%d (%d chunks) order=%s -- watch [ferrite-pregen] in latest.log",
+				"[pregen] started @ chunk (%d, %d) radius=%d (%d chunks) order=%s -- watch [ferrite-pregen] in ferrite.log",
 				cx, cz, radius, total, PregenDriver.order.name().toLowerCase());
 		sendFeedback(ctx, msg, true);
 		ExampleMod.LOGGER.info(msg);
@@ -1985,6 +1989,28 @@ public final class FerriteCommand {
 		return Command.SINGLE_SUCCESS;
 	}
 
+	/**
+	 * Ferrite's own log file (logs/ferrite.log): on, every Ferrite line goes
+	 * there and the main log keeps only its warnings and errors; off, all of
+	 * it goes to the main log. Saved in config/ferrite.properties.
+	 */
+	private static int logFile(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, boolean on) {
+		String error = me.apika.apikaprobe.monitor.FerriteLogFile.setEnabled(on);
+		me.apika.apikaprobe.config.FerriteConfig.set(
+				me.apika.apikaprobe.config.FerriteConfig.KEY_LOG_FILE, on, true);
+		String msg = error == null
+				? me.apika.apikaprobe.monitor.FerriteLogFile.status()
+				: "[log] file unavailable: " + error;
+		sendFeedback(ctx, msg, true);
+		ExampleMod.LOGGER.info(msg);
+		return error == null ? Command.SINGLE_SUCCESS : 0;
+	}
+
+	private static int logFileStatus(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+		sendFeedback(ctx, me.apika.apikaprobe.monitor.FerriteLogFile.status(), false);
+		return Command.SINGLE_SUCCESS;
+	}
+
 	private static int logMonitorsStatus(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
 		String msg = String.format("[log] monitors=%s",
 				me.apika.apikaprobe.monitor.MonitorLog.ENABLED ? "ENABLED" : "DISABLED");
@@ -2016,7 +2042,7 @@ public final class FerriteCommand {
 		if (was) saveMutedCategories();
 		String msg = was
 				? "[log] category [" + cat + "] unmuted"
-				: "[log] category [" + cat + "] was not muted (check spelling against the bracket tag in latest.log)";
+				: "[log] category [" + cat + "] was not muted (check spelling against the bracket tag in ferrite.log)";
 		sendFeedback(ctx, msg, true);
 		ExampleMod.LOGGER.info(msg);
 		return Command.SINGLE_SUCCESS;

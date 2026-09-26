@@ -40,6 +40,8 @@ public final class FerriteConfig {
 	public static final String KEY_ISOLATE_SERVER_CORE = "isolate-server-core";
 	/** Read by FerriteMixinPlugin at launch; takes effect on restart. */
 	public static final String KEY_DIAGNOSTICS = "diagnostics";
+	/** Read by FerriteMixinPlugin at launch; /ferrite log file also switches it live. */
+	public static final String KEY_LOG_FILE = "log-file";
 
 	private static final Properties STATE = new Properties();
 
@@ -96,7 +98,7 @@ public final class FerriteConfig {
 			switch (key) {
 				case KEY_CRAMMING, KEY_HOPPER, KEY_REDSTONE_AC,
 						KEY_LOG_MONITORS, KEY_LOG_MUTED, KEY_DIAGNOSTICS, KEY_PRECHUNK,
-						KEY_ISOLATE_SERVER_CORE -> {}
+						KEY_ISOLATE_SERVER_CORE, KEY_LOG_FILE -> {}
 				default -> ExampleMod.LOGGER.warn(
 						"[config] unknown key \"{}\" in {} (ignored)", key, FILE_NAME);
 			}

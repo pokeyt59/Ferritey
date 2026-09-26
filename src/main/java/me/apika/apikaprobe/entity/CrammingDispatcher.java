@@ -233,7 +233,7 @@ public final class CrammingDispatcher {
 		long now = System.nanoTime();
 		if (now - lastOverflowLogNs < OVERFLOW_LOG_MIN_GAP_NS) return;
 		lastOverflowLogNs = now;
-		LOGGER.warn("[cramming-dispatch] {} mobs exceeds MAX_ENTITIES={}, falling back to vanilla",
+		LOGGER.info("[cramming-dispatch] {} mobs exceeds MAX_ENTITIES={}, falling back to vanilla",
 				count, CrammingHandoff.MAX_ENTITIES);
 	}
 

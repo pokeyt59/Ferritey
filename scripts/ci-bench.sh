@@ -13,6 +13,8 @@
 set -euo pipefail
 
 LOG=bench-server.log
+# Ferrite's own log; the console ($LOG) keeps only its warnings and errors.
+FLOG=run/logs/ferrite.log
 REPORT=bench-report.txt
 RCON_PORT=25575
 RCON_PASSWORD=ferrite-bench
@@ -44,6 +46,8 @@ PID=$!
 fail() {
 	echo "::error::$1"
 	tail -n 150 "$LOG"
+	echo "--- ferrite.log"
+	tail -n 60 "$FLOG" 2>/dev/null || true
 	kill "$PID" 2>/dev/null || true
 	exit 1
 }
@@ -62,7 +66,8 @@ rcon() { python3 scripts/rcon.py "$RCON_PORT" "$RCON_PASSWORD" "$@"; }
 
 wait_for 'Done (' 1200
 wait_for 'RCON running' 60
-grep -E '\[hw\]|lean mode|Loading [0-9]+ mods' "$LOG" || true
+grep -E 'Loading [0-9]+ mods' "$LOG" || true
+grep -E '\[hw\]|lean mode' "$FLOG" || true
 grep -A3 'Loading [0-9]* mods' "$LOG" | head -5 || true
 
 # --- Scene ---------------------------------------------------------------
@@ -204,9 +209,9 @@ wait "$PID" || true
 if grep -E -q 'Mixin apply for mod ferrite failed|InvalidInjectionException|Critical injection failure|MixinApplyError' "$LOG"; then
 	fail "mixin errors in the server log"
 fi
-grep -v 'Rcon:' "$LOG" | grep '\[entity-query-cache\] scanned\|\[collider-skip\] eligible' | tail -8 || true
-if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH\|\[clip-airskip\] MISMATCH' "$LOG"; then
-	grep 'MISMATCH' "$LOG" | head -5
+grep '\[entity-query-cache\] scanned\|\[collider-skip\] eligible' "$FLOG" | tail -8 || true
+if grep -q 'GRID MISMATCH\|filter skipped intersecting\|\[collider-skip\] MISMATCH\|\[clip-airskip\] MISMATCH' "$FLOG"; then
+	grep -m 5 'MISMATCH' "$FLOG"
 	fail "oracle mismatches"
 fi
 

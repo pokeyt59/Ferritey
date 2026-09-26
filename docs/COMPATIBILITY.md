@@ -398,7 +398,14 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   in the queue changed nothing, and asking for their neighbours at the
   same time made it worse. Pregenerating the world (Chunky) moves those
   stalls to the pregen run, and `/ferrite tickwatch 100` shows them in
-  the log.
+  `logs/ferrite.log`.
+- **Logging setups (Log4j).** Ferrite adds a Log4j logger config named
+  `ferrite` at launch that sends its lines to `logs/ferrite.log` and only
+  warnings and errors to the root logger's appenders (console,
+  `latest.log`). If your own Log4j configuration already defines a
+  `ferrite` logger, Ferrite leaves it alone and says so once in the log;
+  with a logging backend other than Log4j, everything stays in the main
+  log. A Log4j reconfigure at runtime gets the routing re-applied.
 - **spark.** With spark installed Ferrite runs in lean mode: the
   timing-only mixins are not applied and monitor reports start off.
   `-Dferrite.diagnostics=true` or `/ferrite diagnostics on` (after a

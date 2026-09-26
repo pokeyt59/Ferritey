@@ -532,7 +532,7 @@ public final class PhysicsHandoff {
 		long now = System.nanoTime();
 		if (now - lastOverflowLogNs < OVERFLOW_LOG_MIN_GAP_NS) return;
 		lastOverflowLogNs = now;
-		LOGGER.warn("[physics-snapshot] {} overflow (limit={}), falling back to vanilla",
+		LOGGER.info("[physics-snapshot] {} overflow (limit={}), falling back to vanilla",
 				which, limit);
 	}
 }

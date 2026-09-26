@@ -110,7 +110,7 @@ A shadow-compute `RedstoneOracle` validates every sampled cascade against vanill
 
 ## Commands
 
-All Ferrite toggles live under `/ferrite`. Default state is in the rightmost column. Cramming, AC, pre-chunk, monitor logging and diagnostics are saved to `config/ferrite.properties` (only deviations from defaults); diagnostic and experiment flags last for the running session.
+All Ferrite toggles live under `/ferrite`. Default state is in the rightmost column. Cramming, AC, pre-chunk, monitor logging, the log file and diagnostics are saved to `config/ferrite.properties` (only deviations from defaults); diagnostic and experiment flags last for the running session.
 
 ### User-facing toggles
 
@@ -127,8 +127,9 @@ All Ferrite toggles live under `/ferrite`. Default state is in the rightmost col
 | `/ferrite worldgen structure-dfu status\|cache on\|off\|cache verify on\|off` | Keeps structure templates, once upgraded from older game versions through DataFixerUpper, on disk in `.ferrite/structure-dfu`. Later starts then skip the upgrade, tens of seconds of CPU per start with many structure mods. The cache is tied to the exact mod set and versions. `verify on` compares every cached template with a fresh upgrade. Session only; `-Dferrite.worldgen.structurecache=false`. | **on** |
 | `/ferrite worldgen height-cache on\|off\|status` | Remembers the generator's terrain height queries (structure placement asks for them; each builds a whole `NoiseChunk` for one column). A hit returns exactly what the query computes: the answer depends only on the generator, seed state, level height range, column and heightmap type. Every 64th hit is recomputed and compared. Session only; `-Dferrite.worldgen.heightcache=false`. | **on** |
 | `/ferrite worldgen isolate-server-core on\|off\|status` | Linux: keeps the server thread on a physical CPU core of its own and the worldgen workers on the other cores, so chunk generation while players explore doesn't slow ticks through a shared core. It trades cores for generation for tick time, so new terrain can load more slowly on a busy machine. Saved; `-Dferrite.affinity.servercore=true`. The first use prints a JDK restricted-method warning; `--enable-native-access=ALL-UNNAMED` silences it. | off |
-| `/ferrite tickwatch <ms>\|off\|status` | A profiler for slow ticks only: while a tick runs longer than `<ms>`, it samples the server thread's stack every 10 ms and logs one `[slow-tick]` line with the most common stacks. Unlike a sampling profiler, it also shows a server thread that is waiting, for a chunk, a lock or the disk. Session only. | off |
+| `/ferrite tickwatch <ms>\|off\|status` | A profiler for slow ticks only: while a tick runs longer than `<ms>`, it samples the server thread's stack every 10 ms and logs one `[slow-tick]` line with the most common stacks to `logs/ferrite.log`. Unlike a sampling profiler, it also shows a server thread that is waiting, for a chunk, a lock or the disk. Session only. | off |
 | `/ferrite prechunk on\|off\|status` | Movement-predictive chunk tickets ahead of moving players. Never showed a measurable TPS gain and loads chunks up to 16 past view distance, so it is off; `-Dferrite.prechunk=true` turns it on at boot. | off |
+| `/ferrite log file on\|off\|status` | Ferrite writes its own log, `logs/ferrite.log`, rolled over at each start like `latest.log`. The main log (`latest.log` and the console) keeps only Ferrite's warnings and errors, plus one line at startup saying where the rest went. Off puts every Ferrite line back in the main log. Saved; `-Dferrite.log.file=false` turns it off at boot. | **on** |
 | `/ferrite diagnostics on\|off\|auto\|status` | Whether the timing-only mixins behind the periodic monitor reports load. `auto` means lean (skipped) when spark is installed. Applied on restart; `-Dferrite.diagnostics=true\|false` overrides. | auto |
 | `/ferrite redstone ac on\|off\|status` | Alternate Current wire algorithm (~15x fewer cascades). Turn on for performance; turn off if a contraption relies on quasi-connectivity, 0-tick pulses, or instawire. | off |
 | `/ferrite redstone bfs on\|off\|status` | Per-cascade Rust BFS for power propagation (~30% additional wire-cost reduction). Only effective when AC is on. | on (unreachable until AC is enabled via `/ferrite redstone ac on`) |
@@ -189,7 +190,7 @@ If you run mob farms, crowded multiplayer servers, or singleplayer worlds with l
 
 1. Install Ferrite + Fabric API
 2. Play normally for 10+ minutes
-3. Open `.minecraft/logs/latest.log`, search for `[ferrite]`
+3. Open `logs/ferrite.log` in the game or server folder (`.minecraft/logs/ferrite.log` in singleplayer): Ferrite's own log
 4. Share representative `[cramming-dispatch]` and `[movement-internals]` lines in a GitHub issue or CurseForge comment (with spark installed Ferrite runs lean and skips those timers; boot with `-Dferrite.diagnostics=true` for a report)
 
 Low-end hardware (4-core CPU, integrated graphics) is especially useful: the `[chunkgen]` and `[client-lag]` logs on that profile decide what gets optimized next.
