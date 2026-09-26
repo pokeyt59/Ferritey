@@ -22,6 +22,7 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -52,8 +53,9 @@ import net.minecraft.world.level.levelgen.Heightmap;
  *
  * Status per player: chunks sent (per second), chunks within 5 of the
  * player not yet sent ("holes", sampled each second: what a player sees
- * as missing terrain), seconds with a hole within 2, and seconds spent
- * waiting for terrain.
+ * as missing terrain), seconds with a hole within 2, seconds spent
+ * waiting for terrain, and mobs within 128 blocks now (to check that a
+ * change leaves spawning alone).
  *
  * /ferrite bench players add <mode> <x> <z> <heading>|clear|status.
  * Nothing runs unless the command is used.
@@ -267,6 +269,12 @@ public final class FakeExplorers {
 		return "[bench-players] removed " + n + " player(s)";
 	}
 
+	/** Mobs within 128 blocks of the player; 0 once it has left. */
+	private static int mobsNear(Explorer e) {
+		if (e.player.isRemoved()) return 0;
+		return e.player.level().getEntitiesOfClass(Mob.class, e.player.getBoundingBox().inflate(128)).size();
+	}
+
 	public static synchronized String status() {
 		if (explorers.isEmpty()) return "[bench-players] none";
 		StringBuilder sb = new StringBuilder();
@@ -277,13 +285,13 @@ public final class FakeExplorers {
 				total += e.chunksSent;
 				if (sb.length() > 0) sb.append('\n');
 				sb.append(String.format(
-						"[bench-players] %s %s view=%d travelled=%.0f blocks chunks_sent=%d (%.1f/s) holes_r5 avg=%.1f max=%d seconds_hole_within_2=%d seconds_waiting=%d of %.0f s",
+						"[bench-players] %s %s view=%d travelled=%.0f blocks chunks_sent=%d (%.1f/s) holes_r5 avg=%.1f max=%d seconds_hole_within_2=%d seconds_waiting=%d of %.0f s mobs_within_128=%d",
 						e.player.getScoreboardName(), e.mode.name().toLowerCase(java.util.Locale.ROOT),
 						Math.min(e.player.requestedViewDistance(), e.player.level().getServer().getPlayerList().getViewDistance()),
 						e.travelled,
 						e.chunksSent, e.chunksSent / seconds,
 						e.holeSamples == 0 ? 0.0 : (double) e.holeSum / e.holeSamples, e.holeMax,
-						e.secondsHoleNear, e.secondsWaiting, seconds));
+						e.secondsHoleNear, e.secondsWaiting, seconds, mobsNear(e)));
 			}
 		}
 		sb.append(String.format("%n[bench-players] total chunks_sent=%d", total));
