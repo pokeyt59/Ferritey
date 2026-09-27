@@ -490,6 +490,11 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   - it stays connected throughout;
   - no mod logs a mixin error, and Ferrite logs no oracle mismatch.
 
+  A Bedrock player needs about the same upload as a Java player
+  (`bandwidth` leg): 1.5 Mbit/s at elytra speed at Geyser's default
+  compression level, against an estimated 1.7 for Java, and 1.9 at
+  `compression-level: 1`. See the changelog for the table.
+
   The only Geyser errors in the log are its warning that Xbox login
   checks are off, which the test needs.
 - **Logging setups (Log4j).** Ferrite adds a Log4j logger config named

@@ -468,9 +468,75 @@ marks pre-release research builds.
     alongside), Geyser's threads took 149 and 219 ms/s. Its RakNet
     threads fell from about 3.2 s per thread per arm to under 1.5 s,
     and dropped out of the ten busiest threads. The two legs ran on
-    different runners, both calibrated to the same 2× model. Bandwidth
-    was not measured; level 1 sends somewhat larger packets to Bedrock
-    clients.
+    different runners, both calibrated to the same 2× model. The
+    bandwidth leg below repeats it on one runner, with the upload it
+    costs.
+- Upload per player, Bedrock through Geyser against Java (Geyser job,
+  `bandwidth` leg, laptop model at 2×, view distance 10). Each arm ran
+  three players of one kind for 60 s:
+  - standing at spawn among about 190 mobs;
+  - flying east at walking speed (5.6 blocks/s) over a pregenerated
+    corridor;
+  - flying east at elytra speed (33 blocks/s) over the same corridor.
+
+  The server restarted for each Geyser compression level; level 6 ran
+  first and last.
+
+  | Per player | Standing among mobs | Walking speed | Elytra speed | Geyser's CPU at elytra speed |
+  |---|---|---|---|---|
+  | Bedrock, `compression-level: 6` (default) | 0.06 Mbit/s | 0.52-0.61 Mbit/s | 1.52-1.57 Mbit/s | 87-89 ms/s |
+  | Bedrock, level 3 | 0.05 Mbit/s | 0.58 Mbit/s | 1.74 Mbit/s | 65 ms/s |
+  | Bedrock, level 1 | 0.05 Mbit/s | 0.61 Mbit/s | 1.87 Mbit/s | 57 ms/s |
+  | Java (estimate, see below) | 0.09-0.10 Mbit/s | 0.59-0.61 Mbit/s | 1.65-1.68 Mbit/s | none |
+
+  - **Against a 20 Mbit/s upload:**
+    - at elytra speed, 12 Bedrock players fit at level 6, 10 at
+      level 1, and about 11 Java players;
+    - at walking speed, about 32 of either kind fit;
+    - standing players barely count.
+  - **Same terrain.** At elytra speed each player received 48-51
+    chunks/s in every arm, Bedrock and Java alike. At walking speed
+    each received 8-9 chunks/s.
+  - **Bytes per chunk.** Counting all traffic, each chunk cost 3.9 KB at
+    level 6, 4.5 KB at level 3, 4.7 KB at level 1, and 4.4 KB for Java.
+    Java's chunk packets carry light data; Bedrock's don't.
+  - **Joins and teleports come as a burst.** At about 4 KB a chunk, a
+    player's whole view at distance 10 (441 chunks) is about 2 MB,
+    under a second of a 20 Mbit/s upload.
+  - **Compression level, measured on one runner:**
+    - Level 1 cut Geyser's CPU by 35% at elytra speed and 26% at walking
+      speed, for 21% more upload.
+    - Level 3 cut Geyser's CPU by 26% at elytra speed and 9% at walking
+      speed, for 13% more upload.
+    - Tick time at walking and elytra speed did not depend on the
+      level: 7.8-9.0 ms mean after the first block.
+    - The two level 6 runs agreed within 4% on upload at elytra speed
+      (1.57 and 1.52 Mbit/s) and within 2% on Geyser's CPU (266 and
+      261 ms/s for three players). Walking speed varied more: 0.61 and
+      0.52 Mbit/s.
+  - **Upload from players** was 6-12 kbit/s per Bedrock player.
+  - **How it was measured, Bedrock.** Bedrock bytes are loopback UDP
+    byte counters (iptables) on Geyser's port. They include IP and UDP
+    headers, so they are what the link carries except Ethernet framing.
+  - **How it was measured, Java.** No Java client library supports this
+    game version yet, so Java is an estimate. The bench's own players
+    measure each packet the server sends them: encoded with the game's
+    codec, then compressed and framed as the game's pipeline would at
+    the server's compression threshold (`WireMeter`). The estimate
+    leaves out:
+    - TCP/IP headers, a few percent while streaming terrain (full
+      segments);
+    - how the connection flushes. Standing among mobs, a Java player
+      got about 900 small packets a second. Sent one per TCP segment,
+      their headers would add up to 0.4 Mbit/s per player; flushed
+      together once a tick, under 0.01.
+    - Krypton's own compressor.
+
+    Bedrock players standing among mobs cost less, because Geyser
+    batches a tick's packets and compresses them together.
+  - **Left out:** the first level 6 standing arm. Its players were
+    still receiving the spawn area (489 chunks while the worldgen
+    threads worked), so it measured a join, not standing.
 
 ### CI
 - Rust tests run on every push, and a headless dedicated-server smoke
@@ -563,10 +629,18 @@ marks pre-release research builds.
     - no mod logs a mixin error.
   - **Cost** (`cost`): Bedrock bots against Java-equivalent bench
     players on the laptop model, per thread group.
+  - **Bandwidth** (`bandwidth`): upload per player for Bedrock bots at
+    Geyser compression levels 6, 1 and 3 (and 6 again), standing,
+    walking and at elytra speed, against Java-equivalent bench players.
+    Bedrock is counted by loopback iptables byte counters on Geyser's
+    port. Java uses `/ferrite bench players meter on|off|reset`, which
+    measures what a real Java connection would carry for the bench's
+    players. It ends with a table per player against a 20 Mbit/s
+    upload.
   - **New commands:** `/ferrite bench cpu reset|status` gives CPU per
     thread group (server, worldgen, geyser, network, other).
     `/ferrite bench players drive` flies an existing player along a
-    path.
+    path, at any mode's speed. The bench players have an `idle` mode.
   - **Shared model:** the laptop-speed model moved to
     `scripts/laptop-model.sh`.
   - **Scenario tags** (`[players-bench:…]`, `[geyser:…]`) are read from
