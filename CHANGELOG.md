@@ -461,6 +461,16 @@ marks pre-release research builds.
   - **Not measured:** the Java-equivalent players skip network encoding.
     A real Java client's own encoding and compression are not included
     here.
+  - **Repeated:** a repeat on another runner gave 251 and 299 ms/s for
+    Geyser's threads with three Bedrock players.
+  - **Compression level 1 cut Geyser's CPU by about a third.** With
+    Geyser's `compression-level` at 1 instead of 6 (`cost-c1` leg, run
+    alongside), Geyser's threads took 149 and 219 ms/s. Its RakNet
+    threads fell from about 3.2 s per thread per arm to under 1.5 s,
+    and dropped out of the ten busiest threads. The two legs ran on
+    different runners, both calibrated to the same 2× model. Bandwidth
+    was not measured; level 1 sends somewhat larger packets to Bedrock
+    clients.
 
 ### CI
 - Rust tests run on every push, and a headless dedicated-server smoke
