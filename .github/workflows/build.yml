@@ -243,18 +243,28 @@ jobs:
       - name: javap vanilla and mod targets
         shell: bash
         run: scripts/ci-inspect.sh
-      # The Bedrock client the Geyser job would use: which Bedrock versions it
-      # speaks, to compare with the ones Geyser accepts (GameProtocol above).
-      - name: bedrock-protocol versions
+      # The test clients the Geyser job uses (scripts/test-clients): which
+      # Bedrock versions bedrock-protocol speaks, and whether
+      # minecraft-protocol (a Java client) supports this game version.
+      - name: test client versions
         shell: bash
         run: |
           node --version || true
+          mc=$(sed -n 's/^minecraft_version=//p' gradle.properties)
           echo "bedrock-protocol $(npm view bedrock-protocol version 2>/dev/null)"
           mkdir -p /tmp/bp && cd /tmp/bp
           if npm pack bedrock-protocol > /dev/null 2>&1; then
             tar -xzf bedrock-protocol-*.tgz
-            grep -nE 'VERSION|Versions|offline' package/src/options.js | head -30 || true
-            grep -rnE 'offline' package/src/client.js package/src/client/*.js 2>/dev/null | head -10 || true
+            grep -nE 'CURRENT_VERSION' package/src/options.js | head -3 || true
+          fi
+          mkdir -p /tmp/jp && cd /tmp/jp
+          npm init -y > /dev/null
+          if npm install --no-audit --no-fund minecraft-protocol > npm.log 2>&1; then
+            echo "minecraft-protocol $(node -p "require('minecraft-protocol/package.json').version") minecraft-data $(node -p "require('minecraft-data/package.json').version")"
+            node -e "const v=require('minecraft-protocol/src/version'); console.log('default', v.defaultVersion); console.log('supported (last 8)', v.supportedVersions.slice(-8).join(' '))" || true
+            node -e "const md=require('minecraft-data'); console.log('pc versions (last 8)', md.supportedVersions.pc.slice(-8).join(' ')); const d=md('$mc'); console.log('$mc', d ? ('protocol ' + d.version.version + ' ' + d.version.minecraftVersion + ' protocol-data ' + !!d.protocol) : 'not in minecraft-data')" || true
+          else
+            tail -20 npm.log
           fi
 
   # Mob-heavy benchmark with Lithium loaded: /tick query MSPT across
