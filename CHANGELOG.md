@@ -437,6 +437,30 @@ marks pre-release research builds.
   - **Simulation distance 6** made no clear difference.
   - **Server core isolation** (`isolate-server-core`) sent fewer chunks:
     0.3/s to the walker against 1.1/s. It did not shorten freezes.
+- Bedrock players through Geyser (Geyser job, `cost` leg, laptop model
+  at 2×). Three players flew at elytra speed over a pregenerated
+  corridor for 60 s per arm:
+
+  | Arm | Tick time mean / p95 | CPU in all | Server thread | Geyser's threads |
+  |---|---|---|---|---|
+  | 3 Java-equivalent players (last arm) | 11.0 / 17.4 ms | 671 ms/s | 200 ms/s | 2 ms/s |
+  | 3 Bedrock players | 15.0 / 27.6 ms | 1,144 ms/s | 199 ms/s | 416 ms/s |
+  | 3 Bedrock players | 12.2 / 22.5 ms | 1,014 ms/s | 206 ms/s | 308 ms/s |
+
+  - **Where the cost goes.** Geyser's threads took 100-140 ms of CPU per
+    second per Bedrock player: about 3% of a 2-core, 4-thread laptop
+    for each player streaming terrain at elytra speed. About half of
+    that was Geyser's RakNet threads (compression and sending), the
+    rest its per-player translation. The server thread did not change.
+  - **Same terrain.** Bedrock players received the same terrain as Java
+    players. The bot counts twice the chunks because Geyser sends each
+    unloaded chunk as an empty one.
+  - **The first Java arm doesn't count.** It paid for loading the
+    corridor from disk (5.5 ms of worker CPU per chunk against 1.5
+    later), so it is not the comparison.
+  - **Not measured:** the Java-equivalent players skip network encoding.
+    A real Java client's own encoding and compression are not included
+    here.
 
 ### CI
 - Rust tests run on every push, and a headless dedicated-server smoke
