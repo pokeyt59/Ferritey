@@ -12,12 +12,18 @@
 // It answers Geyser's network stack latency probes, which Geyser turns
 // into the Java keep-alive replies, and tells Geyser it has spawned.
 //
+// An offline login carries XUID 0, and Floodgate makes a player's UUID
+// from the XUID: a second bot would be "already logged in". Each name
+// gets its own XUID (--xuid, or one derived from the name).
+//
 // node bot.js --name FerriteBot1 [--host 127.0.0.1] [--port 19132]
 //   [--duration 120] [--view 10] [--every 10] [--raknet raknet-native|jsp-raknet]
 // Exit code: 0 if it stayed until the end, 2 on a disconnect or error,
 // 3 if it never spawned.
 'use strict'
 
+const crypto = require('crypto')
+const path = require('path')
 const bedrock = require('bedrock-protocol')
 
 function arg (name, fallback) {
@@ -32,10 +38,24 @@ const duration = Number(arg('duration', '120'))
 const view = Number(arg('view', '10'))
 const raknet = arg('raknet', 'raknet-native')
 const every = Number(arg('every', '10'))
+// A 16-digit XUID like Xbox Live's (2535...), the same for the same name.
+const xuid = arg('xuid', '2535' + String(parseInt(crypto.createHash('sha256').update(name).digest('hex').slice(0, 12), 16) % 1e12).padStart(12, '0'))
+
+// Older protocols sign XUID "0" into the offline login's extraData; the
+// newer (OpenID) login takes the profile's xuid, set on 'session' below.
+const jwt = require(require.resolve('jsonwebtoken', { paths: [path.dirname(require.resolve('bedrock-protocol'))] }))
+const sign = jwt.sign
+jwt.sign = function (payload, ...rest) {
+  if (payload && payload.extraData && payload.extraData.XUID === '0') {
+    payload = Object.assign({}, payload, { extraData: Object.assign({}, payload.extraData, { XUID: xuid }) })
+  }
+  return sign.call(this, payload, ...rest)
+}
 
 const started = Date.now()
 const stats = {
   name,
+  xuid,
   version: null,
   spawned: false,
   spawn_seconds: null,
@@ -79,6 +99,10 @@ const client = bedrock.createClient({
   viewDistance: view,
   raknetBackend: raknet,
   connectTimeout: 30000
+})
+
+client.on('session', (profile) => {
+  profile.xuid = xuid
 })
 
 client.on('start_game', (p) => {
