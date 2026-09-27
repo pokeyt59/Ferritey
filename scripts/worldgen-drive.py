@@ -5,6 +5,7 @@ Usage:
   worldgen-drive.py <port> <password> baseline <samples>
   worldgen-drive.py <port> <password> explore <start-chunk-x> <width> <step-seconds> <duration-seconds> [label]
   worldgen-drive.py <port> <password> players <label> <duration-seconds> <mode:x:z:heading>...
+  worldgen-drive.py <port> <password> sample <label> <duration-seconds>
 
 baseline: samples /tick query every 5 s and prints tick-time stats.
 
@@ -24,6 +25,9 @@ heading as Minecraft yaw, -90 = east), lets them travel for <duration>,
 samples /tick query every 5 s meanwhile, then prints tick-time stats,
 each player's chunks sent, holes near it and time spent waiting for
 terrain, the worldgen workers' CPU per chunk sent, and removes them.
+
+sample: samples /tick query every 5 s for <duration> and prints tick-time
+stats, for arms whose players something else moves (scripts/ci-geyser.sh).
 """
 import re
 import socket
@@ -218,6 +222,13 @@ def main():
                 sys.argv[8] if len(sys.argv) > 8 else "")
     elif mode == "players":
         players(r, sys.argv[4], float(sys.argv[5]), sys.argv[6:])
+    elif mode == "sample":
+        samples = []
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < float(sys.argv[5]):
+            time.sleep(5)
+            samples.append(tick_query(r))
+        summarize(f"[{sys.argv[4]}] players", samples)
     else:
         sys.exit(f"unknown mode {mode}")
 

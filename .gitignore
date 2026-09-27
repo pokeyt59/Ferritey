@@ -66,3 +66,7 @@ logs/
 
 docs/LOCAL_DESIGN.md
 __pycache__/
+
+# Bedrock test client dependencies (scripts/bedrock-bot)
+node_modules/
+package-lock.json

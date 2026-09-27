@@ -57,8 +57,15 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * waiting for terrain, and mobs within 128 blocks now (to check that a
  * change leaves spawning alone).
  *
- * /ferrite bench players add <mode> <x> <z> <heading>|clear|status.
- * Nothing runs unless the command is used.
+ * A real player (a Bedrock client through Geyser, in scripts/ci-geyser.sh)
+ * can be driven along the same kind of path: drive moves an existing
+ * player in a flying mode by teleport each tick, as a flight would move
+ * it, so the server loads, sends and tracks for it as for the bench's own
+ * players. Its client counts what it receives; clear stops driving it.
+ *
+ * /ferrite bench players add <mode> <x> <z> <heading>|drive <player>
+ * <mode> <x> <z> <heading>|clear|status. Nothing runs unless the command
+ * is used.
  */
 public final class FakeExplorers {
 	private FakeExplorers() {}
@@ -101,6 +108,11 @@ public final class FakeExplorers {
 		int secondsHoleNear;
 		int secondsWaiting;
 		int ticks;
+
+		/** A real player moved by the bench (drive), not one it created. */
+		boolean driven() {
+			return connection == null;
+		}
 
 		Explorer(ServerPlayer player, FakeConnection connection, Mode mode, double x, double y, double z, double headingDeg) {
 			this.player = player;
@@ -159,6 +171,31 @@ public final class FakeExplorers {
 	}
 
 	/**
+	 * Moves an existing player (by name) from x, z heading headingDeg in a
+	 * flying mode (elytra or boat), by teleport each tick. Its view distance
+	 * is its own client's.
+	 */
+	public static synchronized String drive(MinecraftServer server, ServerLevel level, String playerName, String modeName,
+			double x, double z, double headingDeg) {
+		Mode mode;
+		try {
+			mode = Mode.valueOf(modeName.toUpperCase(java.util.Locale.ROOT));
+		} catch (IllegalArgumentException e) {
+			return "[bench-players] unknown mode " + modeName + " (elytra, boat)";
+		}
+		if (mode.grounded) return "[bench-players] drive needs a flying mode (elytra, boat): the bench cannot see what a real client has received";
+		ServerPlayer player = server.getPlayerList().getPlayerByName(playerName);
+		if (player == null) return "[bench-players] no player " + playerName;
+		register();
+		explorers.removeIf(e -> e.player == player);
+		double y = mode == Mode.ELYTRA ? 200 : level.getSeaLevel();
+		player.teleportTo(level, x, y, z, Set.of(), (float) headingDeg, 0f, false);
+		explorers.add(new Explorer(player, null, mode, x, y, z, headingDeg));
+		return String.format("[bench-players] driving %s as %s from %.0f %.0f heading %.0f", playerName,
+				mode.name().toLowerCase(java.util.Locale.ROOT), x, z, headingDeg);
+	}
+
+	/**
 	 * A client's settings with its render distance. The game's default
 	 * settings ask for 2 chunks (a placeholder until a client sends its
 	 * own), which would load a 5x5 area. ClientInformation is a record:
@@ -213,7 +250,7 @@ public final class FakeExplorers {
 				e.player.connection.handleChunkBatchReceived(new ServerboundChunkBatchReceivedPacket(CLIENT_CHUNKS_PER_TICK));
 			}
 			move(e);
-			if (++e.ticks % 20 == 0) sample(e);
+			if (++e.ticks % 20 == 0 && !e.driven()) sample(e);
 		}
 	}
 
@@ -235,6 +272,12 @@ public final class FakeExplorers {
 		e.x = nx;
 		e.z = nz;
 		e.travelled += step;
+		if (e.driven()) {
+			// A real client: the teleport tells it where it is now.
+			e.player.teleportTo(level, e.x, e.y, e.z, Set.of(), e.player.getYRot(), 0f, false);
+			level.getChunkSource().move(e.player);
+			return;
+		}
 		e.player.snapTo(e.x, e.y, e.z);
 		level.getChunkSource().move(e.player);
 	}
@@ -262,6 +305,7 @@ public final class FakeExplorers {
 	public static synchronized String clear(MinecraftServer server) {
 		int n = explorers.size();
 		for (Explorer e : explorers) {
+			if (e.driven()) continue;
 			e.connection.close();
 			if (!e.player.isRemoved()) server.getPlayerList().remove(e.player);
 		}
@@ -281,6 +325,13 @@ public final class FakeExplorers {
 		long total = 0;
 		for (Explorer e : explorers) {
 			double seconds = Math.max(1e-9, (System.nanoTime() - e.startNanos) / 1e9);
+			if (e.driven()) {
+				if (sb.length() > 0) sb.append('\n');
+				sb.append(String.format("[bench-players] %s %s driven travelled=%.0f blocks of %.0f s%s mobs_within_128=%d",
+						e.player.getScoreboardName(), e.mode.name().toLowerCase(java.util.Locale.ROOT), e.travelled, seconds,
+						e.player.isRemoved() ? " (left)" : "", mobsNear(e)));
+				continue;
+			}
 			synchronized (e) {
 				total += e.chunksSent;
 				if (sb.length() > 0) sb.append('\n');

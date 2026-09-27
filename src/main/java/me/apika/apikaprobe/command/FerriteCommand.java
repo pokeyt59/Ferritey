@@ -337,12 +337,39 @@ public final class FerriteCommand {
 																					IntegerArgumentType.getInteger(ctx, "heading")), false);
 																			return Command.SINGLE_SUCCESS;
 																		}))))))
+								// A real player (a Bedrock bot through Geyser), flown along a path by the bench.
+								.then(Commands.literal("drive")
+										.then(Commands.argument("player", StringArgumentType.word())
+												.then(Commands.argument("mode", StringArgumentType.word())
+														.then(Commands.argument("x", IntegerArgumentType.integer())
+																.then(Commands.argument("z", IntegerArgumentType.integer())
+																		.then(Commands.argument("heading", IntegerArgumentType.integer(-360, 360))
+																				.executes(ctx -> {
+																					sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.drive(
+																							ctx.getSource().getServer(), ctx.getSource().getLevel(),
+																							StringArgumentType.getString(ctx, "player"),
+																							StringArgumentType.getString(ctx, "mode"),
+																							IntegerArgumentType.getInteger(ctx, "x"),
+																							IntegerArgumentType.getInteger(ctx, "z"),
+																							IntegerArgumentType.getInteger(ctx, "heading")), false);
+																					return Command.SINGLE_SUCCESS;
+																				})))))))
 								.then(Commands.literal("clear").executes(ctx -> {
 									sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.clear(ctx.getSource().getServer()), false);
 									return Command.SINGLE_SUCCESS;
 								}))
 								.then(Commands.literal("status").executes(ctx -> {
 									sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.status(), false);
+									return Command.SINGLE_SUCCESS;
+								})))
+						// CPU time per thread group since a reset (ThreadCpuGroups).
+						.then(Commands.literal("cpu")
+								.then(Commands.literal("reset").executes(ctx -> {
+									sendFeedback(ctx, me.apika.apikaprobe.monitor.ThreadCpuGroups.reset(), false);
+									return Command.SINGLE_SUCCESS;
+								}))
+								.then(Commands.literal("status").executes(ctx -> {
+									sendFeedback(ctx, me.apika.apikaprobe.monitor.ThreadCpuGroups.status(), false);
 									return Command.SINGLE_SUCCESS;
 								})))
 						// View and simulation distance for the running server, as server.properties would set them.
