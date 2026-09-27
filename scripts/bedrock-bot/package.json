@@ -1,9 +1,0 @@
-{
-  "name": "ferrite-bedrock-bot",
-  "private": true,
-  "description": "A Bedrock client for the CI Geyser job (scripts/ci-geyser.sh): joins through Geyser, counts what it receives.",
-  "main": "bot.js",
-  "dependencies": {
-    "bedrock-protocol": "3.60.1"
-  }
-}

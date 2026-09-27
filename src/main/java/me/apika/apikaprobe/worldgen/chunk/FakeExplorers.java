@@ -59,13 +59,20 @@ import net.minecraft.world.level.levelgen.Heightmap;
  *
  * A real player (a Bedrock client through Geyser, in scripts/ci-geyser.sh)
  * can be driven along the same kind of path: drive moves an existing
- * player in a flying mode by teleport each tick, as a flight would move
- * it, so the server loads, sends and tracks for it as for the bench's own
- * players. Its client counts what it receives; clear stops driving it.
+ * player by teleport each tick at a mode's speed, always flying (at y 200,
+ * or sea level for a boat: the bench cannot see what a real client has
+ * received, so it cannot follow the ground as a client would), so the
+ * server loads, sends and tracks for it as for the bench's own players.
+ * Its client counts what it receives; clear stops driving it.
+ *
+ * With the meter on (WireMeter), each bench player's packets are also
+ * measured as a real Java connection would have sent them, for the
+ * bandwidth of Java players in scripts/ci-geyser.sh; meter reset starts
+ * a new count (bytes and chunks since then).
  *
  * /ferrite bench players add <mode> <x> <z> <heading>|drive <player>
- * <mode> <x> <z> <heading>|clear|status. Nothing runs unless the command
- * is used.
+ * <mode> <x> <z> <heading>|meter on|off|reset|clear|status. Modes: idle,
+ * walk, horse, elytra, boat. Nothing runs unless the command is used.
  */
 public final class FakeExplorers {
 	private FakeExplorers() {}
@@ -79,7 +86,7 @@ public final class FakeExplorers {
 	private static final int CLIENT_VIEW_DISTANCE = 12;
 
 	enum Mode {
-		WALK(5.6, true), HORSE(10.0, true), ELYTRA(33.0, false), BOAT(40.0, false);
+		IDLE(0.0, true), WALK(5.6, true), HORSE(10.0, true), ELYTRA(33.0, false), BOAT(40.0, false);
 
 		final double blocksPerSecond;
 		final boolean grounded;
@@ -97,6 +104,8 @@ public final class FakeExplorers {
 		final double dx;
 		final double dz;
 		final long startNanos = System.nanoTime();
+		long meterResetNanos = System.nanoTime();
+		long chunksAtMeterReset;
 		double x, y, z;
 		double travelled;
 		int pendingAcks;
@@ -130,6 +139,7 @@ public final class FakeExplorers {
 	private static final List<Explorer> explorers = new ArrayList<>();
 	private static boolean registered;
 	private static int nextId;
+	private static boolean meterOn;
 
 	public static synchronized void register() {
 		if (registered) return;
@@ -144,7 +154,7 @@ public final class FakeExplorers {
 		try {
 			mode = Mode.valueOf(modeName.toUpperCase(java.util.Locale.ROOT));
 		} catch (IllegalArgumentException e) {
-			return "[bench-players] unknown mode " + modeName + " (walk, horse, elytra, boat)";
+			return "[bench-players] unknown mode " + modeName + " (idle, walk, horse, elytra, boat)";
 		}
 		register();
 		String name = "bench" + (nextId++);
@@ -165,15 +175,16 @@ public final class FakeExplorers {
 		// The chunk map follows a player on movement; start it at the destination.
 		level.getChunkSource().move(player);
 		Explorer e = new Explorer(player, connection, mode, x, y, z, headingDeg);
+		if (meterOn) connection.meter = new WireMeter(server);
 		holder[0] = e;
 		explorers.add(e);
 		return String.format("[bench-players] %s joined as %s at %.0f %.0f heading %.0f", name, mode.name().toLowerCase(java.util.Locale.ROOT), x, z, headingDeg);
 	}
 
 	/**
-	 * Moves an existing player (by name) from x, z heading headingDeg in a
-	 * flying mode (elytra or boat), by teleport each tick. Its view distance
-	 * is its own client's.
+	 * Moves an existing player (by name) from x, z heading headingDeg at a
+	 * mode's speed, flying, by teleport each tick. Its view distance is its
+	 * own client's.
 	 */
 	public static synchronized String drive(MinecraftServer server, ServerLevel level, String playerName, String modeName,
 			double x, double z, double headingDeg) {
@@ -181,14 +192,13 @@ public final class FakeExplorers {
 		try {
 			mode = Mode.valueOf(modeName.toUpperCase(java.util.Locale.ROOT));
 		} catch (IllegalArgumentException e) {
-			return "[bench-players] unknown mode " + modeName + " (elytra, boat)";
+			return "[bench-players] unknown mode " + modeName + " (idle, walk, horse, elytra, boat)";
 		}
-		if (mode.grounded) return "[bench-players] drive needs a flying mode (elytra, boat): the bench cannot see what a real client has received";
 		ServerPlayer player = server.getPlayerList().getPlayerByName(playerName);
 		if (player == null) return "[bench-players] no player " + playerName;
 		register();
 		explorers.removeIf(e -> e.player == player);
-		double y = mode == Mode.ELYTRA ? 200 : level.getSeaLevel();
+		double y = mode == Mode.BOAT ? level.getSeaLevel() : 200;
 		player.teleportTo(level, x, y, z, Set.of(), (float) headingDeg, 0f, false);
 		explorers.add(new Explorer(player, null, mode, x, y, z, headingDeg));
 		return String.format("[bench-players] driving %s as %s from %.0f %.0f heading %.0f", playerName,
@@ -259,7 +269,7 @@ public final class FakeExplorers {
 		double step = e.mode.blocksPerSecond / 20.0;
 		double nx = e.x + e.dx * step;
 		double nz = e.z + e.dz * step;
-		if (e.mode.grounded) {
+		if (e.mode.grounded && !e.driven()) {
 			// A client cannot walk into terrain it has not received.
 			LevelChunk ahead = level.getChunkSource().getChunkNow((int) Math.floor(nx) >> 4, (int) Math.floor(nz) >> 4);
 			if (ahead == null || !e.sent.contains(ahead.getPos().pack())) {
@@ -302,6 +312,32 @@ public final class FakeExplorers {
 		}
 	}
 
+	/** Measures (or stops measuring) what the bench's own players would receive on a real connection. */
+	public static synchronized String meter(MinecraftServer server, boolean on) {
+		meterOn = on;
+		for (Explorer e : explorers) {
+			if (e.driven()) continue;
+			e.connection.meter = on ? new WireMeter(server) : null;
+		}
+		meterReset();
+		return "[bench-players] wire meter " + (on ? "on" : "off");
+	}
+
+	/** Starts a new count: wire bytes and chunks sent since now. */
+	public static synchronized String meterReset() {
+		WireMeter.flush();
+		for (Explorer e : explorers) {
+			if (e.driven()) continue;
+			WireMeter m = e.connection.meter;
+			if (m != null) m.reset();
+			synchronized (e) {
+				e.chunksAtMeterReset = e.chunksSent;
+			}
+			e.meterResetNanos = System.nanoTime();
+		}
+		return "[bench-players] wire meter reset";
+	}
+
 	public static synchronized String clear(MinecraftServer server) {
 		int n = explorers.size();
 		for (Explorer e : explorers) {
@@ -323,6 +359,11 @@ public final class FakeExplorers {
 		if (explorers.isEmpty()) return "[bench-players] none";
 		StringBuilder sb = new StringBuilder();
 		long total = 0;
+		long wireTotal = 0;
+		long wireChunks = 0;
+		double wireSeconds = 0;
+		long encodeFailures = 0;
+		WireMeter.flush();
 		for (Explorer e : explorers) {
 			double seconds = Math.max(1e-9, (System.nanoTime() - e.startNanos) / 1e9);
 			if (e.driven()) {
@@ -343,9 +384,24 @@ public final class FakeExplorers {
 						e.chunksSent, e.chunksSent / seconds,
 						e.holeSamples == 0 ? 0.0 : (double) e.holeSum / e.holeSamples, e.holeMax,
 						e.secondsHoleNear, e.secondsWaiting, seconds, mobsNear(e)));
+				WireMeter m = e.connection.meter;
+				if (m != null) {
+					double since = Math.max(1e-9, (System.nanoTime() - e.meterResetNanos) / 1e9);
+					long chunks = e.chunksSent - e.chunksAtMeterReset;
+					sb.append(String.format(" | wire since reset: %d bytes in %.1f s (%.3f Mbit/s), %d packets, %d chunks",
+							m.bytes.get(), since, m.bytes.get() * 8 / since / 1e6, m.packets.get(), chunks));
+					wireTotal += m.bytes.get();
+					wireChunks += chunks;
+					wireSeconds = Math.max(wireSeconds, since);
+					encodeFailures += m.encodeFailures.get();
+				}
 			}
 		}
 		sb.append(String.format("%n[bench-players] total chunks_sent=%d", total));
+		if (meterOn) {
+			sb.append(String.format(" wire_bytes=%d wire_seconds=%.1f wire_chunks=%d encode_failures=%d",
+					wireTotal, wireSeconds, wireChunks, encodeFailures));
+		}
 		return sb.toString();
 	}
 }

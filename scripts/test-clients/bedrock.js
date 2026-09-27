@@ -16,7 +16,7 @@
 // from the XUID: a second bot would be "already logged in". Each name
 // gets its own XUID (--xuid, or one derived from the name).
 //
-// node bot.js --name FerriteBot1 [--host 127.0.0.1] [--port 19132]
+// node bedrock.js --name FerriteBot1 [--host 127.0.0.1] [--port 19132]
 //   [--duration 120] [--view 10] [--every 10] [--raknet raknet-native|jsp-raknet]
 // Exit code: 0 if it stayed until the end, 2 on a disconnect or error,
 // 3 if it never spawned.
@@ -60,6 +60,8 @@ const stats = {
   spawned: false,
   spawn_seconds: null,
   chunks: 0,
+  // Geyser unloads a chunk on Bedrock by sending it empty: no sub-chunks.
+  chunks_empty: 0,
   subchunks: 0,
   entities_added: 0,
   players_added: 0,
@@ -130,7 +132,10 @@ client.on('network_stack_latency', (p) => {
   }
 })
 
-client.on('level_chunk', () => { stats.chunks++ })
+client.on('level_chunk', (p) => {
+  stats.chunks++
+  if (p.sub_chunk_count === 0) stats.chunks_empty++
+})
 client.on('subchunk', () => { stats.subchunks++ })
 client.on('add_entity', () => { stats.entities_added++ })
 client.on('add_player', () => { stats.players_added++ })

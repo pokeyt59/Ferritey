@@ -447,10 +447,11 @@ jobs:
           if-no-files-found: ignore
 
   # Ferrite with Geyser and Floodgate on the target server's mods: a Bedrock
-  # client (scripts/bedrock-bot, bedrock-protocol) joins over RakNet and is
+  # client (scripts/test-clients, bedrock-protocol) joins over RakNet and is
   # checked for commands, mobs, chunks and disconnects (full, and with
   # Ferrite's runtime features off), and Bedrock players' cost is measured
-  # on the laptop model (cost). scripts/ci-geyser.sh.
+  # on the laptop model (cost), and their upload per player against Java
+  # players' at Geyser's compression levels (bandwidth). scripts/ci-geyser.sh.
   # "[geyser]" in the commit message runs it; "[geyser:a,b]" only a and b.
   geyser:
     needs: [build-native-linux]
@@ -460,7 +461,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [full, features-off, cost, cost-c1]
+        scenario: [full, features-off, cost, cost-c1, bandwidth]
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -501,10 +502,10 @@ jobs:
           mapfile -t geyser < <(grep -v '^#' scripts/geyser-mods.txt | grep -v '^$')
           python3 scripts/modrinth-fetch.py "$mc" run/geyser "${geyser[@]}" | tee -a geyser-mods-fetched.txt
           ls -1 run/mods run/geyser
-      - name: install the Bedrock client
+      - name: install the test clients
         if: steps.pick.outputs.run == 'true'
         shell: bash
-        working-directory: scripts/bedrock-bot
+        working-directory: scripts/test-clients
         run: npm install --no-audit --no-fund
       - name: geyser
         if: steps.pick.outputs.run == 'true'

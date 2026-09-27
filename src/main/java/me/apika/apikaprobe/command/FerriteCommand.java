@@ -337,6 +337,20 @@ public final class FerriteCommand {
 																					IntegerArgumentType.getInteger(ctx, "heading")), false);
 																			return Command.SINGLE_SUCCESS;
 																		}))))))
+								// Bytes a real Java connection would carry for the bench's players (WireMeter).
+								.then(Commands.literal("meter")
+										.then(Commands.literal("on").executes(ctx -> {
+											sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.meter(ctx.getSource().getServer(), true), false);
+											return Command.SINGLE_SUCCESS;
+										}))
+										.then(Commands.literal("off").executes(ctx -> {
+											sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.meter(ctx.getSource().getServer(), false), false);
+											return Command.SINGLE_SUCCESS;
+										}))
+										.then(Commands.literal("reset").executes(ctx -> {
+											sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.meterReset(), false);
+											return Command.SINGLE_SUCCESS;
+										})))
 								// A real player (a Bedrock bot through Geyser), flown along a path by the bench.
 								.then(Commands.literal("drive")
 										.then(Commands.argument("player", StringArgumentType.word())

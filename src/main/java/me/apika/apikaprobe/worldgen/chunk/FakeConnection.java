@@ -20,10 +20,14 @@ import net.minecraft.network.protocol.PacketFlow;
  * included, and hands it to send(), which passes it to the explorer and
  * drops it. Protocol switches and disconnects do nothing. An embedded
  * channel stands in for the socket, for code that reads the channel.
+ * With a WireMeter attached, each packet is also measured as a real
+ * connection would have sent it.
  */
 final class FakeConnection extends Connection {
 	private final Consumer<Packet<?>> sink;
 	private volatile boolean open = true;
+	/** Measures what a real client would have received; null when off. */
+	volatile WireMeter meter;
 
 	FakeConnection(Consumer<Packet<?>> sink) {
 		super(PacketFlow.SERVERBOUND);
@@ -39,17 +43,24 @@ final class FakeConnection extends Connection {
 
 	@Override
 	public void send(Packet<?> packet) {
-		if (open) sink.accept(packet);
+		deliver(packet);
 	}
 
 	@Override
 	public void send(Packet<?> packet, ChannelFutureListener listener) {
-		if (open) sink.accept(packet);
+		deliver(packet);
 	}
 
 	@Override
 	public void send(Packet<?> packet, ChannelFutureListener listener, boolean flush) {
-		if (open) sink.accept(packet);
+		deliver(packet);
+	}
+
+	private void deliver(Packet<?> packet) {
+		if (!open) return;
+		WireMeter m = meter;
+		if (m != null) m.count(packet);
+		sink.accept(packet);
 	}
 
 	@Override

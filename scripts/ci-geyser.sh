@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Ferrite with Geyser and Floodgate: Bedrock players on the target server
 # (the user's mods from scripts/server-mods.txt and worldgen-mods.txt,
-# Krypton included), joined by a Bedrock client (scripts/bedrock-bot) over
+# Krypton included), joined by a Bedrock client (scripts/test-clients) over
 # RakNet, as a Bedrock player joins through Floodgate.
 #
 # Scenarios (GEYSER_SCENARIO):
@@ -27,6 +27,21 @@
 #   cost-c1       cost with Geyser's Bedrock compression-level at 1 instead
 #                 of its default: about half of Geyser's CPU is its RakNet
 #                 threads, which compress what goes to Bedrock clients.
+#   bandwidth     bytes per player on the wire, on the laptop model, for
+#                 three players standing at spawn next to husks (idle),
+#                 flying at walking speed (walk) or at elytra speed
+#                 (elytra) over a pregenerated corridor:
+#                   - Bedrock players through Geyser at compression-level
+#                     6, 1, 3 and 6 again (a restart per level, same world):
+#                     UDP bytes to and from port 19132 on loopback, counted
+#                     by iptables (IP and UDP headers included);
+#                   - Java-equivalent bench players (blocks with level 6):
+#                     what a real Java connection would carry, measured by
+#                     the bench's wire meter (WireMeter: the game's own
+#                     encoding and compression; no Java client library
+#                     supports this version). TCP/IP headers not included.
+#                 Also chunks per player, bytes per chunk, Geyser's CPU and
+#                 tick time; a summary against a 20 Mbit/s upload.
 #
 # Geyser and Floodgate are fetched into run/geyser by the workflow. The
 # first start writes their configs; the script then sets Geyser's auth
@@ -123,10 +138,14 @@ stop_server() {
 	fi
 }
 
-# bot_start <name> <duration-seconds> [status-every]: a Bedrock client in
-# the background, its JSON lines in bots/<name>.jsonl.
+# bot_start <name> <duration-seconds> [status-every] [bedrock|java]: a test
+# client (scripts/test-clients) in the background, its JSON lines in
+# bots/<name>.jsonl. Bedrock clients join through Geyser, Java ones
+# directly.
 bot_start() {
-	node scripts/bedrock-bot/bot.js --name "$1" --duration "$2" --every "${3:-10}" --port "$BEDROCK_PORT" \
+	local client=${4:-bedrock} port=$BEDROCK_PORT
+	[ "$client" = java ] && port=25565
+	node "scripts/test-clients/$client.js" --name "$1" --duration "$2" --every "${3:-10}" --port "$port" \
 		> "$BOTS/$1.jsonl" 2> "$BOTS/$1.err" &
 	BOT_PID[$1]=$!
 }
@@ -136,8 +155,8 @@ bot_wait_spawn() {
 	until grep -q '"bot":"spawned"' "$BOTS/$name.jsonl" 2>/dev/null; do
 		sleep 1
 		waited=$((waited + 1))
-		kill -0 "${BOT_PID[$name]}" 2>/dev/null || fail "Bedrock bot $name exited before spawning: $(tail -n 3 "$BOTS/$name.jsonl" "$BOTS/$name.err" 2>/dev/null)"
-		[ "$waited" -lt "$limit" ] || fail "Bedrock bot $name did not spawn in $limit s"
+		kill -0 "${BOT_PID[$name]}" 2>/dev/null || fail "test client $name exited before spawning: $(tail -n 3 "$BOTS/$name.jsonl" "$BOTS/$name.err" 2>/dev/null)"
+		[ "$waited" -lt "$limit" ] || fail "test client $name did not spawn in $limit s"
 	done
 }
 
@@ -164,7 +183,7 @@ bot_stop() {
 	wait "${BOT_PID[$name]}" || code=$?
 	unset "BOT_PID[$name]"
 	grep '"bot":"summary"' "$BOTS/$name.jsonl" | tail -n 1 | sed "s/^/[$SCENARIO] /" | tee -a "$REPORT"
-	[ "$code" -eq 0 ] || fail "Bedrock bot $name ended with code $code (disconnected: $(bot_field "$name" disconnected))"
+	[ "$code" -eq 0 ] || fail "test client $name ended with code $code (disconnected: $(bot_field "$name" disconnected))"
 }
 
 stop_bots() {
@@ -185,8 +204,8 @@ configure_geyser() {
 	start_server
 	sleep 10
 	stop_server
-	local cfg
-	cfg=$(find run/config -maxdepth 2 -iname 'config.yml' -ipath '*geyser*' | head -1)
+	GEYSER_CFG=$(find run/config -maxdepth 2 -iname 'config.yml' -ipath '*geyser*' | head -1)
+	local cfg=$GEYSER_CFG
 	[ -n "$cfg" ] || fail "Geyser wrote no config under run/config"
 	echo "Geyser config: $cfg" | tee -a "$REPORT"
 	GEYSER_COMPRESSION=${GEYSER_COMPRESSION:-} python3 - "$cfg" <<'PY' | tee -a "$REPORT"
@@ -387,10 +406,227 @@ cost() {
 	stop_server
 }
 
+# --- bandwidth -------------------------------------------------------------
+BW_SECONDS=60
+BW_X=40000
+BW_START=$((BW_X + 176))
+BW_SPAWN_X=
+BW_SPAWN_Z=
+# iptables counting rules (no target: they only count), on loopback.
+BW_RULES=(
+	"bedrock-down -p udp --sport $BEDROCK_PORT"
+	"bedrock-up -p udp --dport $BEDROCK_PORT"
+)
+
+bw_setup() {
+	sudo -n iptables -L OUTPUT -n > /dev/null 2>&1 || fail "iptables is not usable here (it needs sudo)"
+	local rule
+	for rule in "${BW_RULES[@]}"; do
+		# shellcheck disable=SC2086
+		sudo -n iptables -I OUTPUT -o lo ${rule#* } -m comment --comment "ferrite-bw-${rule%% *}"
+	done
+	sudo -n iptables -L OUTPUT -v -x -n | tee -a "$REPORT"
+}
+
+bw_zero() { sudo -n iptables -Z OUTPUT; }
+
+# bw_bytes <rule name>: bytes counted since the last bw_zero.
+bw_bytes() {
+	sudo -n iptables -L OUTPUT -v -x -n | python3 -c '
+import sys
+want = "/* ferrite-bw-" + sys.argv[1] + " */"
+for line in sys.stdin:
+    if want in line:
+        print(line.split()[1])
+        break
+else:
+    print(0)' "$1"
+}
+
+set_geyser_level() {
+	sed -i -E "s/^([[:space:]]*compression-level:).*/\1 $1/" "$GEYSER_CFG"
+	grep -n 'compression-level' "$GEYSER_CFG" | sed "s/^/[bandwidth] /" | tee -a "$REPORT"
+}
+
+# One machine-readable line per arm, for the summary.
+bw_record() {
+	echo "[bw] client=$1 level=$2 activity=$3 players=3 seconds=$BW_SECONDS down_bytes=$4 up_bytes=$5 chunks=$6 mspt=$7 geyser_ms_s=$8 total_ms_s=$9" | tee -a "$REPORT"
+}
+
+cpu_field() { sed -n "s/.* $1=[0-9]* ms (\([0-9.]*\) ms\/s).*/\1/p" | head -1; }
+
+bw_warmup() {
+	bot_start WarmBot 60 10 bedrock
+	bot_wait_spawn WarmBot 120
+	sleep 20
+	bot_stop WarmBot
+	sleep 5
+}
+
+# bw_arm_bedrock <label> <level> <idle|walk|elytra>
+bw_arm_bedrock() {
+	local label=$1 level=$2 activity=$3 i name player out mspt cpu down up chunks=0 c
+	declare -A c0
+	for i in 1 2 3; do bot_start "BwBot$i" 400 2 bedrock; done
+	for i in 1 2 3; do bot_wait_spawn "BwBot$i" 120; done
+	for i in 1 2 3; do
+		name="BwBot$i"
+		player=$(java_name "$name")
+		[ -n "$player" ] || fail "$name is not in /list"
+		rcon "gamemode creative $player" > /dev/null
+		if [ -z "$BW_SPAWN_X" ]; then
+			read -r BW_SPAWN_X BW_SPAWN_Z < <(rcon "data get entity $player Pos" | python3 -c '
+import re, sys
+v = re.findall(r"(-?[0-9.]+)d", sys.stdin.read())
+print(int(float(v[0])), int(float(v[2])))')
+			echo "[bandwidth] spawn at $BW_SPAWN_X $BW_SPAWN_Z" | tee -a "$REPORT"
+		fi
+		if [ "$activity" != idle ]; then
+			rcon "ferrite bench players drive $player $activity $((BW_START + 32 * (i - 1))) 0 -90" > /dev/null
+		fi
+	done
+	# Arrival: the view around the start loads before the count starts.
+	sleep 12
+	spin "${NICE[2]}"
+	for i in 1 2 3; do
+		c0[$i]=$(( $(bot_field "BwBot$i" chunks) - $(bot_field "BwBot$i" chunks_empty) ))
+	done
+	bw_zero
+	rcon "ferrite bench cpu reset" > /dev/null
+	out=$(python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" sample "$label" "$BW_SECONDS")
+	down=$(bw_bytes bedrock-down)
+	up=$(bw_bytes bedrock-up)
+	cpu=$(rcon "ferrite bench cpu status")
+	echo "$out" | tee -a "$REPORT"
+	echo "[$label] $cpu" | cut -c1-400 | tee -a "$REPORT"
+	mspt=$(echo "$out" | sed -n 's/.*mspt mean \([0-9.]*\).*/\1/p')
+	sleep 2
+	for i in 1 2 3; do
+		c=$(( $(bot_field "BwBot$i" chunks) - $(bot_field "BwBot$i" chunks_empty) ))
+		chunks=$((chunks + c - ${c0[$i]}))
+	done
+	spin off
+	rcon "ferrite bench players clear" > /dev/null
+	for i in 1 2 3; do bot_stop "BwBot$i"; done
+	bw_record bedrock "$level" "$activity" "$down" "$up" "$chunks" "${mspt:-0}" \
+		"$(echo "$cpu" | cpu_field geyser)" "$(echo "$cpu" | cpu_field total)"
+	sleep 15
+}
+
+# bw_arm_java <label> <idle|walk|elytra>: Java-equivalent bench players,
+# measured by the wire meter.
+bw_arm_java() {
+	local label=$1 activity=$2 i x z out status cpu mspt total
+	rcon "ferrite bench players meter on" > /dev/null
+	for i in 1 2 3; do
+		if [ "$activity" = idle ]; then
+			x=$BW_SPAWN_X
+			z=$BW_SPAWN_Z
+		else
+			x=$((BW_START + 32 * (i - 1)))
+			z=0
+		fi
+		rcon "ferrite bench players add $activity $x $z -90" > /dev/null
+	done
+	sleep 12
+	spin "${NICE[2]}"
+	rcon "ferrite bench players meter reset" > /dev/null
+	rcon "ferrite bench cpu reset" > /dev/null
+	out=$(python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" sample "$label" "$BW_SECONDS")
+	status=$(rcon "ferrite bench players status")
+	cpu=$(rcon "ferrite bench cpu status")
+	spin off
+	echo "$out" | tee -a "$REPORT"
+	echo "$status" | sed "s/^/[$label] /" | tee -a "$REPORT"
+	echo "[$label] $cpu" | cut -c1-400 | tee -a "$REPORT"
+	mspt=$(echo "$out" | sed -n 's/.*mspt mean \([0-9.]*\).*/\1/p')
+	total=$(echo "$status" | grep 'total chunks_sent')
+	echo "$total" | grep -q 'encode_failures=0' || echo "::warning::wire meter could not encode some packets: $total"
+	rcon "ferrite bench players clear" "ferrite bench players meter off" > /dev/null
+	bw_record java - "$activity" \
+		"$(echo "$total" | sed -n 's/.*wire_bytes=\([0-9]*\).*/\1/p')" 0 \
+		"$(echo "$total" | sed -n 's/.*wire_chunks=\([0-9]*\).*/\1/p')" "${mspt:-0}" \
+		"$(echo "$cpu" | cpu_field geyser)" "$(echo "$cpu" | cpu_field total)"
+	sleep 15
+}
+
+bw_block() {
+	local label=$1 level=$2 java=$3 act
+	for act in idle walk elytra; do bw_arm_bedrock "$label-bedrock-L$level-$act" "$level" "$act"; done
+	if [ "$java" = yes ]; then
+		for act in idle walk elytra; do bw_arm_java "$label-java-$act" "$act"; done
+	fi
+}
+
+bw_summary() {
+	echo "=== bandwidth per player (Mbit/s down to the player), against a 20 Mbit/s upload ===" | tee -a "$REPORT"
+	python3 - "$REPORT" <<'PY' | tee -a "$REPORT"
+import re, sys
+from collections import defaultdict
+rows = defaultdict(list)
+for line in open(sys.argv[1]):
+    if line.startswith("[bw] "):
+        f = dict(re.findall(r"(\w+)=(\S*)", line))
+        rows[(f["client"], f["level"], f["activity"])].append(f)
+order = {"idle": 0, "walk": 1, "elytra": 2}
+print("client   level activity   Mbit/s  up kbit/s  chunks/s  KB/chunk  fit in 20  geyser ms/s   mspt  runs (Mbit/s)")
+for key in sorted(rows, key=lambda k: (k[0] != "bedrock", k[1], order.get(k[2], 9))):
+    rs = rows[key]
+    n = len(rs)
+    secs = float(rs[0]["seconds"])
+    players = int(rs[0]["players"])
+    down = sum(int(r["down_bytes"] or 0) for r in rs) / n
+    up = sum(int(r["up_bytes"] or 0) for r in rs) / n
+    chunks = sum(int(r["chunks"] or 0) for r in rs) / n
+    mbit = down * 8 / secs / players / 1e6
+    upk = up * 8 / secs / players / 1e3 if key[0] == "bedrock" else float("nan")
+    cps = chunks / secs / players
+    kbc = down / chunks / 1000 if chunks else float("nan")
+    fit = int(20 / mbit) if mbit > 0 else 0
+    gey = sum(float(r["geyser_ms_s"] or 0) for r in rs) / n / players if key[0] == "bedrock" else float("nan")
+    mspt = sum(float(r["mspt"] or 0) for r in rs) / n
+    runs = " ".join("%.2f" % (int(r["down_bytes"] or 0) * 8 / secs / players / 1e6) for r in rs)
+    print("%-8s %-5s %-8s %8.2f %10.1f %9.1f %9.1f %10d %12.1f %6.1f  %s"
+          % (key[0], key[1], key[2], mbit, upk, cps, kbc, fit, gey, mspt, runs))
+PY
+}
+
+bandwidth() {
+	sudo -n sysctl -qw kernel.sched_autogroup_enabled=0 2>/dev/null || echo "could not turn scheduler autogroups off"
+	GEYSER_COMPRESSION=6 configure_geyser
+	start_server
+	calibrate
+	pregen_corridor "$BW_X" 9
+	bw_setup
+	# Husks at spawn for the idle arms (the console runs at world spawn).
+	local cmds=("fill ~4 ~ ~4 ~6 ~4 ~6 minecraft:glass hollow")
+	for _ in $(seq 30); do
+		cmds+=("summon minecraft:husk ~5 ~1 ~5 {PersistenceRequired:1b}")
+	done
+	for _ in $(seq 20); do
+		cmds+=("summon minecraft:husk ~-6 ~ ~-6 {PersistenceRequired:1b}")
+	done
+	rcon "${cmds[@]}" | sort | uniq -c | tee -a "$REPORT"
+	bw_warmup
+	bw_block A 6 yes
+	stop_server
+	local spec label level java
+	for spec in "B 1 no" "C 3 no" "D 6 yes"; do
+		read -r label level java <<< "$spec"
+		set_geyser_level "$level"
+		start_server
+		bw_warmup
+		bw_block "$label" "$level" "$java"
+		stop_server
+	done
+	bw_summary
+}
+
 case "$SCENARIO" in
 	full|features-off) compat ;;
 	cost) cost ;;
 	cost-c1) GEYSER_COMPRESSION=1 cost ;;
+	bandwidth) bandwidth ;;
 	*) fail "unknown scenario $SCENARIO" ;;
 esac
 stop_spin

@@ -547,7 +547,7 @@ marks pre-release research builds.
 - **Geyser job** (commit tag `[geyser]`, or `[geyser:a,b]` in the
   subject line). A Bedrock client joins through Geyser and Floodgate on
   the target server's mods (`scripts/ci-geyser.sh`). The client is
-  `scripts/bedrock-bot` (`bedrock-protocol`, offline login with its
+  `scripts/test-clients` (`bedrock-protocol`, offline login with its
   own XUID per bot).
   - **The client joins.** The script sets Geyser's `auth-type:
     floodgate` and `validate-bedrock-login: false` after the first

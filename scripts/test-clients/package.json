@@ -1,0 +1,9 @@
+{
+  "name": "ferrite-test-clients",
+  "private": true,
+  "description": "Test clients for the CI Geyser job (scripts/ci-geyser.sh): a Bedrock client through Geyser (bedrock.js) and a Java client (java.js); they join, stay, and count what they receive.",
+  "main": "bedrock.js",
+  "dependencies": {
+    "bedrock-protocol": "3.60.1"
+  }
+}
