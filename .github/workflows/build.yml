@@ -395,7 +395,9 @@ jobs:
           MSG: ${{ github.event.head_commit.message }}
         run: |
           run=true
-          if [[ "$MSG" =~ \[players-bench:([a-z0-9,.-]+)\] ]]; then
+          # The subject line only: a body may quote the syntax as an example.
+          subject=${MSG%%$'\n'*}
+          if [[ "$subject" =~ \[players-bench:([a-z0-9,.-]+)\] ]]; then
             [[ ",${BASH_REMATCH[1]}," == *",${{ matrix.scenario }},"* ]] || run=false
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
@@ -473,7 +475,9 @@ jobs:
           MSG: ${{ github.event.head_commit.message }}
         run: |
           run=true
-          if [[ "$MSG" =~ \[geyser:([a-z0-9,.-]+)\] ]]; then
+          # The subject line only: a body may quote the syntax as an example.
+          subject=${MSG%%$'\n'*}
+          if [[ "$subject" =~ \[geyser:([a-z0-9,.-]+)\] ]]; then
             [[ ",${BASH_REMATCH[1]}," == *",${{ matrix.scenario }},"* ]] || run=false
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
