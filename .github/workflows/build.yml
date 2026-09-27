@@ -450,7 +450,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [full, features-off, cost]
+        scenario: [full, features-off, cost, cost-c1]
     steps:
       - name: checkout
         uses: actions/checkout@v4

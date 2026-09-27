@@ -24,6 +24,9 @@
 #                 Per arm: tick time, CPU per thread group (/ferrite bench
 #                 cpu: server, worldgen, geyser, network, other) and chunks
 #                 received per player.
+#   cost-c1       cost with Geyser's Bedrock compression-level at 1 instead
+#                 of its default: about half of Geyser's CPU is its RakNet
+#                 threads, which compress what goes to Bedrock clients.
 #
 # Geyser and Floodgate are fetched into run/geyser by the workflow. The
 # first start writes their configs; the script then sets Geyser's auth
@@ -186,11 +189,13 @@ configure_geyser() {
 	cfg=$(find run/config -maxdepth 2 -iname 'config.yml' -ipath '*geyser*' | head -1)
 	[ -n "$cfg" ] || fail "Geyser wrote no config under run/config"
 	echo "Geyser config: $cfg" | tee -a "$REPORT"
-	python3 - "$cfg" <<'PY' | tee -a "$REPORT"
-import re, sys
+	GEYSER_COMPRESSION=${GEYSER_COMPRESSION:-} python3 - "$cfg" <<'PY' | tee -a "$REPORT"
+import os, re, sys
 path = sys.argv[1]
 lines = open(path).read().split("\n")
 want = {"auth-type": "floodgate", "validate-bedrock-login": "false"}
+if os.environ.get("GEYSER_COMPRESSION"):
+    want["compression-level"] = os.environ["GEYSER_COMPRESSION"]
 done = set()
 for i, line in enumerate(lines):
     m = re.match(r"^(\s*)([a-z-]+):(\s*)(.*)$", line)
@@ -215,8 +220,10 @@ open(path, "w").write("\n".join(lines))
 print("geyser config set:", ", ".join(sorted(done)))
 if "auth-type" not in done:
     sys.exit("no auth-type in the Geyser config")
+if "compression-level" in want and "compression-level" not in done:
+    sys.exit("no compression-level in the Geyser config")
 PY
-	grep -nE 'auth-type|validate-bedrock-login|port:' "$cfg" | tee -a "$REPORT" || true
+	grep -nE 'auth-type|validate-bedrock-login|port:|compression' "$cfg" | tee -a "$REPORT" || true
 }
 
 compat() {
@@ -383,6 +390,7 @@ cost() {
 case "$SCENARIO" in
 	full|features-off) compat ;;
 	cost) cost ;;
+	cost-c1) GEYSER_COMPRESSION=1 cost ;;
 	*) fail "unknown scenario $SCENARIO" ;;
 esac
 stop_spin
