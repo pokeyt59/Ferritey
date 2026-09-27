@@ -206,6 +206,7 @@ Low-end hardware (4-core CPU, integrated graphics) is especially useful: the `[c
 - Fabric API 0.154.2+26.2 or newer
 - Works in **singleplayer and multiplayer**
 - **Server-side compatible**, can be installed on a server without requiring players to have the mod
+- **Works with Geyser and Floodgate** (Bedrock players). Ferrite has no hooks in the network code, and CI joins a Bedrock client through Geyser 2.11.3 and Floodgate 2.2.6 on a full server mod list (`[geyser]`, `scripts/ci-geyser.sh`). See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ---
 

@@ -510,6 +510,34 @@ marks pre-release research builds.
     `/ferrite bench distances <view> <sim>` sets both distances at run
     time.
 
+- **Geyser job** (commit tag `[geyser]`, or `[geyser:a,b]` in the
+  subject line). A Bedrock client joins through Geyser and Floodgate on
+  the target server's mods (`scripts/ci-geyser.sh`). The client is
+  `scripts/bedrock-bot` (`bedrock-protocol`, offline login with its
+  own XUID per bot).
+  - **The client joins.** The script sets Geyser's `auth-type:
+    floodgate` and `validate-bedrock-login: false` after the first
+    start writes the config. The client then joins over RakNet as
+    Floodgate's `.FerriteBot1`.
+  - **Checks** (`full`, and `features-off` with Ferrite's runtime
+    features off):
+    - `/ferrite` is in its command list once opped;
+    - it sees husks move next to it, and a pen of them cram;
+    - it is flown through fresh terrain by
+      `/ferrite bench players drive` and receives at least 100 chunks;
+    - it stays connected;
+    - no mod logs a mixin error.
+  - **Cost** (`cost`): Bedrock bots against Java-equivalent bench
+    players on the laptop model, per thread group.
+  - **New commands:** `/ferrite bench cpu reset|status` gives CPU per
+    thread group (server, worldgen, geyser, network, other).
+    `/ferrite bench players drive` flies an existing player along a
+    path.
+  - **Shared model:** the laptop-speed model moved to
+    `scripts/laptop-model.sh`.
+  - **Scenario tags** (`[players-bench:…]`, `[geyser:…]`) are read from
+    the commit subject only.
+
 ## [0.7.4-alpha] - 2026-09-07
 
 ### Fixed

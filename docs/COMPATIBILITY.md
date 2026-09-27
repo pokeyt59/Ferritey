@@ -460,6 +460,38 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
   (`C2ME_OVERLAP_MIXINS`) and says so once in ferrite.log. Everything
   else, including the chunk-wait guards, applies. The CI players bench
   boots with C2ME and compares it with and without.
+- **Geyser and Floodgate (Bedrock players).** Ferrite has no hook in the
+  network code:
+  - no mixin targets the connection, the packet listeners, the player
+    list, chunk sending, entity tracking or any packet class;
+  - it registers no payloads or channels;
+  - nothing reads player names, UUIDs or addresses, so Floodgate's
+    `.Name` players need nothing special.
+
+  Geyser 2.11.3 hooks `ServerConnectionListener`, `DedicatedServer`,
+  block placing and pistons. Floodgate 2.2.6 hooks `Connection`,
+  `ServerConnectionListener`, `ChunkMap` and the handshake packet.
+  Ferrite hooks none of these classes. Where Ferrite does touch players,
+  it is on shared entity paths: the entity query index and the collider
+  skip, both checked against vanilla by oracles, and cramming, which
+  only moves mobs.
+
+  Tested end to end in CI (`scripts/ci-geyser.sh`, commit tag
+  `[geyser]`). A Bedrock client (`bedrock-protocol`, protocol 1.26.51)
+  joins through Geyser and Floodgate over RakNet, on the target
+  server's mods with Krypton, as `.FerriteBot1`. It passed every check
+  with Ferrite's features on, and again with its runtime features off:
+  - once opped, its command list includes `/ferrite` (87 commands);
+  - it sees 50 husks and their movement next to it, and a pen of 30
+    cram down to 22 (24 with Ferrite's cramming off);
+  - flown 90 s through fresh terrain, it receives 7,062 chunks with the
+    features on and 3,323 with them off. Those two ran on runners of
+    different speed, and the slower one also flew less far;
+  - it stays connected throughout;
+  - no mod logs a mixin error, and Ferrite logs no oracle mismatch.
+
+  The only Geyser errors in the log are its warning that Xbox login
+  checks are off, which the test needs.
 - **Logging setups (Log4j).** Ferrite adds a Log4j logger config named
   `ferrite` at launch that sends its lines to `logs/ferrite.log` and only
   warnings and errors to the root logger's appenders (console,
