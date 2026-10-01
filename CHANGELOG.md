@@ -637,10 +637,34 @@ marks pre-release research builds.
     measures what a real Java connection would carry for the bench's
     players. It ends with a table per player against a 20 Mbit/s
     upload.
+  - **Claims** (`goml`): Get Off My Lawn ReServed, built from the
+    server's fork, with Polymer (`scripts/claims-mods.txt`). The Bedrock
+    bot claims a glass platform by placing an anchor; a bench player is
+    the stranger. Checked against a control outside the claim each
+    time: placing blocks, water at the claim's edge, a husk pen
+    cramming, the bot's connection and its chunks through a flight. TNT
+    is recorded with Lithium as installed, then checked after a restart
+    with Lithium's explosion raycast off. Water probes on separate pads
+    show that fluids tick after each step.
+  - **Claims' cost** (`goml-cost`): blocks without and with GOML and
+    Polymer, alternating, each from a copy of one world, with 15 claims
+    in the GOML blocks. Bench players stand among husks, fly over a
+    pregenerated corridor and over fresh terrain (the same in every
+    block); Bedrock bots fly the corridor. A JFR recording per block,
+    read by `scripts/JfrShare.java`, gives the share of samples in GOML
+    (with its bundled libraries), Polymer and Ferrite.
+  - **Joins and starts:** a Bedrock client that cannot join is started
+    once more, and the report says why it failed. A server start that
+    stalls gives up after 10 min and prints the processes, the end of
+    the log and the main threads' stacks. The Geyser job may run
+    100 min.
   - **New commands:** `/ferrite bench cpu reset|status` gives CPU per
     thread group (server, worldgen, geyser, network, other).
     `/ferrite bench players drive` flies an existing player along a
     path, at any mode's speed. The bench players have an `idle` mode.
+    `/ferrite bench players use <player> <x> <y> <z> <item>` has a
+    player use an item on a block as its client would (a claim exists
+    only when a player places its anchor).
   - **Shared model:** the laptop-speed model moved to
     `scripts/laptop-model.sh`.
   - **Scenario tags** (`[players-bench:…]`, `[geyser:…]`) are read from

@@ -207,6 +207,7 @@ Low-end hardware (4-core CPU, integrated graphics) is especially useful: the `[c
 - Works in **singleplayer and multiplayer**
 - **Server-side compatible**, can be installed on a server without requiring players to have the mod
 - **Works with Geyser and Floodgate** (Bedrock players). Ferrite has no hooks in the network code, and CI joins a Bedrock client through Geyser 2.11.3 and Floodgate 2.2.6 on a full server mod list (`[geyser]`, `scripts/ci-geyser.sh`). See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+- **Works with Get Off My Lawn ReServed and Polymer** (claims). No method is hooked by both, and CI checks claims (placing, fluids, cramming, a Bedrock player beside an anchor) on the target server's mods with Geyser (`[geyser:goml]`). Two GOML problems it found are not Ferrite's: with Lithium, claims do not stop explosions, and creating a claim stalls the server for 1 to 2 s. See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
 ---
 
