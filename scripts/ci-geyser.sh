@@ -964,7 +964,8 @@ goml() {
 # 15 claims around spawn, 24 blocks apart (a 4x4 grid less a corner), owned
 # by a bench player. One covers the spawn point and the husk pen.
 gc_claims() {
-	local owner i j x z n=0
+	local owner i j x z n=0 flog0 slow
+	flog0=$(wc -l < "$FLOG")
 	owner=$(bench_player "$BW_SPAWN_X" "$BW_SPAWN_Z")
 	[ -n "$owner" ] || fail "no bench player to own the claims"
 	# Its view loads around spawn.
@@ -989,6 +990,12 @@ gc_claims() {
 	done
 	echo "[goml-cost] $n of 15 claims placed around spawn" | tee -a "$REPORT"
 	[ "$n" -eq 15 ] || fail "only $n of 15 claims were placed"
+	# Ticks over 100 ms while the claims were placed (Ferrite's tick watch),
+	# and those with GOML's web-map marker in the stack.
+	slow=$(tail -n "+$((flog0 + 1))" "$FLOG" | grep 'slow-tick' || true)
+	echo "[goml-cost] slow ticks while placing claims: $(echo "$slow" | grep -c 'between ticks' || true)," \
+		"of which with GOML's web-map marker: $(echo "$slow" | grep -cE 'WebmapCompat|PlayerRecord|PlayerHeadRenderer' || true)," \
+		"longest $(echo "$slow" | sed -n 's/.*: \([0-9]*\) ms between ticks.*/\1/p' | sort -n | tail -1) ms" | tee -a "$REPORT"
 	rcon "ferrite bench players clear" > /dev/null
 }
 
