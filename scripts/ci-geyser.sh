@@ -821,9 +821,18 @@ goml() {
 	tnt_lithium=$(tnt_test "$bx" "$y" "$((bz + 6))" "$((bz - 8))")
 	echo "[goml] TNT with Lithium's explosion raycast on: $tnt_lithium" | tee -a "$REPORT"
 
-	# Water 2 blocks east of the claim's edge (x bx+10).
-	rcon "setblock $((bx + 12)) $((y + 1)) $((bz - 10)) minecraft:water" > /dev/null
-	sleep 10
+	# Water 2 blocks east of the claim's edge (x bx+10), and water far from
+	# the claim (the control: fluids tick here at all).
+	rcon "setblock $((bx + 12)) $((y + 1)) $((bz - 10)) minecraft:water" \
+		"setblock $((bx + 36)) $((y + 1)) $((bz - 12)) minecraft:water" > /dev/null
+	sleep 15
+	local cells="" dx far=no
+	for dx in 10 11 12 13 14; do
+		if block_is $((bx + dx)) $((y + 1)) $((bz - 10)) minecraft:water; then cells+=" bx+$dx:water"; else cells+=" bx+$dx:-"; fi
+	done
+	if block_is $((bx + 37)) $((y + 1)) $((bz - 12)) minecraft:water; then far=yes; fi
+	echo "[goml] water by the claim's edge (x bx+10 is the last claimed):$cells; water far from the claim spread: $far" | tee -a "$REPORT"
+	[ "$far" = yes ] || fail "water far from any claim did not spread either: fluids are not ticking on the platform"
 	block_is $((bx + 11)) $((y + 1)) $((bz - 10)) minecraft:water || fail "water did not spread toward the claim (the control)"
 	block_is $((bx + 14)) $((y + 1)) $((bz - 10)) minecraft:water || fail "water did not spread away from the claim (the control)"
 	block_is $((bx + 10)) $((y + 1)) $((bz - 10)) minecraft:water && fail "water flowed into the claim"
@@ -881,6 +890,8 @@ gc_claims() {
 	local owner i j x z n=0
 	owner=$(bench_player "$BW_SPAWN_X" "$BW_SPAWN_Z")
 	[ -n "$owner" ] || fail "no bench player to own the claims"
+	# Its view loads around spawn.
+	sleep 8
 	for i in 0 1 2 3; do
 		for j in 0 1 2 3; do
 			[ "$i$j" != 33 ] || continue
@@ -986,7 +997,10 @@ goml_cost() {
 	calibrate
 	pregen_corridor "$BW_X" 9
 	bw_setup
-	# Husks at spawn for the idle arms (the console runs at world spawn).
+	# Husks at spawn for the idle arms (the console runs at world spawn). No
+	# player is there, so the spawn area is loaded for this.
+	rcon "forceload add ~-48 ~-48 ~48 ~48" | tee -a "$REPORT"
+	sleep 5
 	local cmds=("fill ~4 ~ ~4 ~6 ~4 ~6 minecraft:glass hollow") spec set n
 	for _ in $(seq 30); do
 		cmds+=("summon minecraft:husk ~5 ~1 ~5 {PersistenceRequired:1b}")
@@ -998,6 +1012,7 @@ goml_cost() {
 	read -r BW_SPAWN_X GC_SPAWN_Y BW_SPAWN_Z < <(spawn_pos)
 	[ -n "$BW_SPAWN_Z" ] || fail "could not read the world spawn"
 	echo "[goml-cost] spawn at $BW_SPAWN_X $GC_SPAWN_Y $BW_SPAWN_Z" | tee -a "$REPORT"
+	rcon "forceload remove all" > /dev/null
 	stop_server
 	rm -rf run/world-base
 	cp -a run/world run/world-base
