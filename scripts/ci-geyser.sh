@@ -890,18 +890,20 @@ goml() {
 	block_is $((bx + 20)) $((y + 1)) $((bz + 8)) minecraft:stone || fail "the stranger could not place a block outside the claim (the control)"
 	echo "[goml] placing: the owner in the claim yes, a stranger in it no, the stranger outside yes" | tee -a "$REPORT"
 
-	# Water 2 blocks east of the claim's edge (x bx+10), before any TNT:
-	# an explosion's crater in the glass would draw the water toward it.
-	rcon "setblock $((bx + 12)) $((y + 1)) $((bz - 10)) minecraft:water" > /dev/null
+	# Water 2 blocks east of the claim's edge (x bx+10), in the platform's
+	# middle row: water runs only toward a drop within four blocks, so it
+	# must be farther than that from the platform's edges (and before any
+	# TNT, whose craters are drops too) to spread every way.
+	rcon "setblock $((bx + 12)) $((y + 1)) $bz minecraft:water" > /dev/null
 	sleep 15
 	local cells="" dx
 	for dx in 10 11 12 13 14; do
-		if block_is $((bx + dx)) $((y + 1)) $((bz - 10)) minecraft:water; then cells+=" bx+$dx:water"; else cells+=" bx+$dx:-"; fi
+		if block_is $((bx + dx)) $((y + 1)) "$bz" minecraft:water; then cells+=" bx+$dx:water"; else cells+=" bx+$dx:-"; fi
 	done
 	echo "[goml] water by the claim's edge (x bx+10 is the last claimed):$cells" | tee -a "$REPORT"
-	block_is $((bx + 11)) $((y + 1)) $((bz - 10)) minecraft:water || fail "water did not spread toward the claim (the control)"
-	block_is $((bx + 14)) $((y + 1)) $((bz - 10)) minecraft:water || fail "water did not spread away from the claim (the control)"
-	block_is $((bx + 10)) $((y + 1)) $((bz - 10)) minecraft:water && fail "water flowed into the claim"
+	block_is $((bx + 11)) $((y + 1)) "$bz" minecraft:water || fail "water did not spread toward the claim (the control)"
+	block_is $((bx + 14)) $((y + 1)) "$bz" minecraft:water || fail "water did not spread away from the claim (the control)"
+	block_is $((bx + 10)) $((y + 1)) "$bz" minecraft:water && fail "water flowed into the claim"
 	echo "[goml] water: stopped at the claim's edge, spread outside" | tee -a "$REPORT"
 
 	# TNT inside the claim and outside it. Lithium's explosion raycast adds
