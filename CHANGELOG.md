@@ -568,9 +568,10 @@ marks pre-release research builds.
 
     So almost all of the cost is Polymer's per-player packet work, not
     the claims.
-  - **Placing 15 claims** gave 11 ticks over 100 ms, the longest 1.3 and
-    1.5 s in the two blocks: GOML's web-map marker, which fetches each
-    owner's skin on the server thread.
+  - **Placing 15 claims** gave 11 ticks over 100 ms in each GOML block,
+    the longest 1.3 and 1.5 s. In the goml leg, the stack of such a
+    tick is GOML's web-map marker fetching the owner's skin on the
+    server thread.
   - **Noise.** Standing and fresh-terrain arms were dominated by
     generating terrain (the idle players loaded spawn's surroundings).
     Their server-thread time did not differ (111 against 112 ms/s
