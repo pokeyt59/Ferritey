@@ -134,8 +134,26 @@ wait_for() {
 		sleep 1
 		waited=$((waited + 1))
 		kill -0 "$PID" 2>/dev/null || fail "server exited while waiting for: $pattern"
-		[ "$waited" -lt "$limit" ] || fail "timed out waiting for: $pattern"
+		if [ "$waited" -ge "$limit" ]; then
+			diagnose_hang
+			fail "timed out waiting for: $pattern"
+		fi
 	done
+}
+
+# What a server that does not get on is doing: the processes, the end of
+# its log, and the stacks of its main threads.
+diagnose_hang() {
+	echo "=== processes ==="
+	ps -eo pid,ppid,etime,args --forest | grep -E 'java|xvfb|Xvfb|gradle' | grep -v grep | cut -c1-300 || true
+	echo "=== end of the server log ==="
+	tail -n 60 "$LOG" | cut -c1-300 || true
+	local pid
+	pid=$(jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}')
+	if [ -n "$pid" ]; then
+		echo "=== threads of $pid ==="
+		jcmd "$pid" Thread.print 2>/dev/null | awk '/^"(main|Server thread|Worker-Main|IO-Worker|Render|AWT)/,/^$/' | head -200 || true
+	fi
 }
 
 rcon() { python3 scripts/rcon.py "$RCON_PORT" "$RCON_PASSWORD" "$@"; }
@@ -146,7 +164,7 @@ source scripts/laptop-model.sh
 start_server() {
 	taskset -c "$CPUS" ./gradlew runServer -x buildRustLib -x copyRustDll "${GRADLE_ARGS[@]}" < /dev/null > "$LOG" 2>&1 &
 	PID=$!
-	wait_for 'Done (' 1800
+	wait_for 'Done (' 600
 	wait_for 'RCON running' 60
 	rcon "ferrite tickwatch 100" > /dev/null
 }
