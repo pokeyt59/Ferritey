@@ -451,7 +451,10 @@ jobs:
   # checked for commands, mobs, chunks and disconnects (full, and with
   # Ferrite's runtime features off), and Bedrock players' cost is measured
   # on the laptop model (cost), and their upload per player against Java
-  # players' at Geyser's compression levels (bandwidth). scripts/ci-geyser.sh.
+  # players' at Geyser's compression levels (bandwidth). The goml legs add
+  # Get Off My Lawn ReServed, built from the server's fork, and Polymer:
+  # claims checked with Ferrite (goml), and what they cost (goml-cost).
+  # scripts/ci-geyser.sh.
   # "[geyser]" in the commit message runs it; "[geyser:a,b]" only a and b.
   geyser:
     needs: [build-native-linux]
@@ -461,7 +464,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [full, features-off, cost, cost-c1, bandwidth]
+        scenario: [full, features-off, cost, cost-c1, bandwidth, goml, goml-cost]
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -502,6 +505,21 @@ jobs:
           mapfile -t geyser < <(grep -v '^#' scripts/geyser-mods.txt | grep -v '^$')
           python3 scripts/modrinth-fetch.py "$mc" run/geyser "${geyser[@]}" | tee -a geyser-mods-fetched.txt
           ls -1 run/mods run/geyser
+      - name: build Get Off My Lawn from the server's fork, fetch Polymer
+        if: steps.pick.outputs.run == 'true' && startsWith(matrix.scenario, 'goml')
+        shell: bash
+        env:
+          GOML_REPO: pokeyt59/get-off-my-lawn-reserved
+        run: |
+          mc=$(sed -n 's/^minecraft_version=//p' gradle.properties)
+          git clone --depth 1 "https://github.com/$GOML_REPO" goml-src
+          echo "goml: $GOML_REPO at $(git -C goml-src rev-parse --short HEAD) ($(git -C goml-src log -1 --format=%s))" | tee -a geyser-mods-fetched.txt
+          (cd goml-src && chmod +x gradlew && ./gradlew build -x test --no-daemon > ../goml-build.log 2>&1) || { tail -40 goml-build.log; exit 1; }
+          mkdir -p run/goml
+          find goml-src/build/libs -name 'goml-*.jar' ! -name '*-sources.jar' ! -name '*-dev.jar' -exec cp {} run/goml/ \;
+          mapfile -t extra < <(grep -v '^#' scripts/claims-mods.txt | grep -v '^$')
+          python3 scripts/modrinth-fetch.py "$mc" run/goml "${extra[@]}" | tee -a geyser-mods-fetched.txt
+          ls -1 run/goml
       - name: install the test clients
         if: steps.pick.outputs.run == 'true'
         shell: bash
@@ -526,6 +544,7 @@ jobs:
             run/logs/ferrite.log
             run/config/Geyser-Fabric/config.yml
             bots/
+            goml-build.log
           if-no-files-found: ignore
 
   # Auto-publishes a GitHub Release when a tag matching v* is pushed.

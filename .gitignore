@@ -31,6 +31,8 @@ bin/
 # fabric
 
 run/
+# The claims mod's source, cloned and built by the Geyser job (goml legs)
+goml-src/
 
 # java
 

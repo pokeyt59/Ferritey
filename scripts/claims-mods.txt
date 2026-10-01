@@ -1,0 +1,5 @@
+# Mods the server's claims mod needs (scripts/ci-geyser.sh, goml
+# scenarios), beside Get Off My Lawn ReServed itself, which the workflow
+# builds from the server's fork. Fetched with scripts/modrinth-fetch.py,
+# newest Fabric build for the game version: slug[@version][=Display Name].
+polymer=Polymer

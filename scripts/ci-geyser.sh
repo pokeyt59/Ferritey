@@ -42,8 +42,32 @@
 #                     supports this version). TCP/IP headers not included.
 #                 Also chunks per player, bytes per chunk, Geyser's CPU and
 #                 tick time; a summary against a 20 Mbit/s upload.
+#   goml          Get Off My Lawn ReServed, built from the server's fork,
+#                 with Polymer (which it needs), beside Geyser and
+#                 Floodgate. The Bedrock bot claims a glass platform in the
+#                 air (a claim anchor it places, through /ferrite bench
+#                 players use); a bench player who does not own it is the
+#                 stranger. Each check has a control outside the claim:
+#                 the owner can place a block in it and the stranger can't;
+#                 TNT leaves the claim's stone and breaks the same stone
+#                 outside; water from outside does not flow in but flows
+#                 the other way; a pen of husks in the claim crams; the bot
+#                 stays connected and then gets chunks all through a 90 s
+#                 flight over fresh terrain. No mixin error from any mod.
+#   goml-cost     what GOML and Polymer cost on the laptop model: blocks
+#                 none, goml, none, goml, each from a copy of one world
+#                 (a pregenerated corridor and husks at spawn), with 15
+#                 claims around spawn in goml blocks. Arms of 60 s with
+#                 three players: Java-equivalent players standing at spawn
+#                 among the husks, flying at elytra speed over the corridor
+#                 and over fresh terrain (the same terrain in every block),
+#                 and Bedrock players at elytra speed over the corridor.
+#                 Per arm: tick time, CPU per thread group, chunks. A JFR
+#                 recording per block gives the share of samples in GOML
+#                 (with the libraries it bundles), in Polymer and in Ferrite.
 #
-# Geyser and Floodgate are fetched into run/geyser by the workflow. The
+# Geyser and Floodgate are fetched into run/geyser by the workflow, GOML
+# and Polymer into run/goml (goml scenarios). The
 # first start writes their configs; the script then sets Geyser's auth
 # type to floodgate and lets it accept the bot's offline login
 # (validate-bedrock-login: false), and starts again.
@@ -74,6 +98,7 @@ view-distance=10
 simulation-distance=10
 level-seed=ferrite-worldgen
 allow-flight=true
+spawn-protection=0
 enforce-secure-profile=false
 enable-rcon=true
 rcon.port=$RCON_PORT
@@ -448,9 +473,17 @@ set_geyser_level() {
 	grep -n 'compression-level' "$GEYSER_CFG" | sed "s/^/[bandwidth] /" | tee -a "$REPORT"
 }
 
-# One machine-readable line per arm, for the summary.
+# One machine-readable line per arm, for the summaries:
+# bw_record <client> <level> <activity> <down bytes> <up bytes> <chunks>
+# <worldgen-drive.py sample output> <ferrite bench cpu status output>.
+# BW_SET tags the line (goml-cost: none or goml).
 bw_record() {
-	echo "[bw] client=$1 level=$2 activity=$3 players=3 seconds=$BW_SECONDS down_bytes=$4 up_bytes=$5 chunks=$6 mspt=$7 geyser_ms_s=$8 total_ms_s=$9" | tee -a "$REPORT"
+	local mspt p95
+	mspt=$(echo "$7" | sed -n 's/.*mspt mean \([0-9.]*\).*/\1/p')
+	p95=$(echo "$7" | sed -n 's/.*p95 mean \([0-9.]*\).*/\1/p')
+	echo "[bw] set=${BW_SET:-} client=$1 level=$2 activity=$3 players=3 seconds=$BW_SECONDS down_bytes=$4 up_bytes=$5 chunks=$6" \
+		"mspt=${mspt:-0} p95=${p95:-0} server_ms_s=$(echo "$8" | cpu_field server) worldgen_ms_s=$(echo "$8" | cpu_field worldgen)" \
+		"geyser_ms_s=$(echo "$8" | cpu_field geyser) total_ms_s=$(echo "$8" | cpu_field total)" | tee -a "$REPORT"
 }
 
 cpu_field() { sed -n "s/.* $1=[0-9]* ms (\([0-9.]*\) ms\/s).*/\1/p" | head -1; }
@@ -465,7 +498,7 @@ bw_warmup() {
 
 # bw_arm_bedrock <label> <level> <idle|walk|elytra>
 bw_arm_bedrock() {
-	local label=$1 level=$2 activity=$3 i name player out mspt cpu down up chunks=0 c
+	local label=$1 level=$2 activity=$3 i name player out cpu down up chunks=0 c
 	declare -A c0
 	for i in 1 2 3; do bot_start "BwBot$i" 400 2 bedrock; done
 	for i in 1 2 3; do bot_wait_spawn "BwBot$i" 120; done
@@ -499,7 +532,6 @@ print(int(float(v[0])), int(float(v[2])))')
 	cpu=$(rcon "ferrite bench cpu status")
 	echo "$out" | tee -a "$REPORT"
 	echo "[$label] $cpu" | cut -c1-400 | tee -a "$REPORT"
-	mspt=$(echo "$out" | sed -n 's/.*mspt mean \([0-9.]*\).*/\1/p')
 	sleep 2
 	for i in 1 2 3; do
 		c=$(( $(bot_field "BwBot$i" chunks) - $(bot_field "BwBot$i" chunks_empty) ))
@@ -508,29 +540,33 @@ print(int(float(v[0])), int(float(v[2])))')
 	spin off
 	rcon "ferrite bench players clear" > /dev/null
 	for i in 1 2 3; do bot_stop "BwBot$i"; done
-	bw_record bedrock "$level" "$activity" "$down" "$up" "$chunks" "${mspt:-0}" \
-		"$(echo "$cpu" | cpu_field geyser)" "$(echo "$cpu" | cpu_field total)"
+	bw_record bedrock "$level" "$activity" "$down" "$up" "$chunks" "$out" "$cpu"
 	sleep 15
 }
 
-# bw_arm_java <label> <idle|walk|elytra>: Java-equivalent bench players,
-# measured by the wire meter.
+# bw_arm_java <label> <idle|walk|elytra> [x z [tag]]: Java-equivalent bench
+# players, measured by the wire meter, from x z (default: the corridor; idle
+# stands at spawn). tag names the arm in the record (default the activity).
+# BW_METER=off leaves the meter off (it encodes on the server thread, which
+# would weigh on a CPU comparison); chunks are then counted from status.
 bw_arm_java() {
-	local label=$1 activity=$2 i x z out status cpu mspt total
-	rcon "ferrite bench players meter on" > /dev/null
+	local label=$1 activity=$2 sx=${3:-$BW_START} sz=${4:-0} tag=${5:-$2} meter=${BW_METER:-on}
+	local i x z out status cpu total c0 bytes chunks
+	if [ "$meter" = on ]; then rcon "ferrite bench players meter on" > /dev/null; fi
 	for i in 1 2 3; do
 		if [ "$activity" = idle ]; then
 			x=$BW_SPAWN_X
 			z=$BW_SPAWN_Z
 		else
-			x=$((BW_START + 32 * (i - 1)))
-			z=0
+			x=$((sx + 32 * (i - 1)))
+			z=$sz
 		fi
 		rcon "ferrite bench players add $activity $x $z -90" > /dev/null
 	done
 	sleep 12
 	spin "${NICE[2]}"
-	rcon "ferrite bench players meter reset" > /dev/null
+	if [ "$meter" = on ]; then rcon "ferrite bench players meter reset" > /dev/null; fi
+	c0=$(rcon "ferrite bench players status" | sed -n 's/.*total chunks_sent=\([0-9]*\).*/\1/p')
 	rcon "ferrite bench cpu reset" > /dev/null
 	out=$(python3 scripts/worldgen-drive.py "$RCON_PORT" "$RCON_PASSWORD" sample "$label" "$BW_SECONDS")
 	status=$(rcon "ferrite bench players status")
@@ -539,14 +575,18 @@ bw_arm_java() {
 	echo "$out" | tee -a "$REPORT"
 	echo "$status" | sed "s/^/[$label] /" | tee -a "$REPORT"
 	echo "[$label] $cpu" | cut -c1-400 | tee -a "$REPORT"
-	mspt=$(echo "$out" | sed -n 's/.*mspt mean \([0-9.]*\).*/\1/p')
 	total=$(echo "$status" | grep 'total chunks_sent')
-	echo "$total" | grep -q 'encode_failures=0' || echo "::warning::wire meter could not encode some packets: $total"
-	rcon "ferrite bench players clear" "ferrite bench players meter off" > /dev/null
-	bw_record java - "$activity" \
-		"$(echo "$total" | sed -n 's/.*wire_bytes=\([0-9]*\).*/\1/p')" 0 \
-		"$(echo "$total" | sed -n 's/.*wire_chunks=\([0-9]*\).*/\1/p')" "${mspt:-0}" \
-		"$(echo "$cpu" | cpu_field geyser)" "$(echo "$cpu" | cpu_field total)"
+	if [ "$meter" = on ]; then
+		echo "$total" | grep -q 'encode_failures=0' || echo "::warning::wire meter could not encode some packets: $total"
+		bytes=$(echo "$total" | sed -n 's/.*wire_bytes=\([0-9]*\).*/\1/p')
+		chunks=$(echo "$total" | sed -n 's/.*wire_chunks=\([0-9]*\).*/\1/p')
+		rcon "ferrite bench players clear" "ferrite bench players meter off" > /dev/null
+	else
+		bytes=0
+		chunks=$(( $(echo "$total" | sed -n 's/.*total chunks_sent=\([0-9]*\).*/\1/p') - ${c0:-0} ))
+		rcon "ferrite bench players clear" > /dev/null
+	fi
+	bw_record java - "$tag" "$bytes" 0 "$chunks" "$out" "$cpu"
 	sleep 15
 }
 
@@ -622,11 +662,331 @@ bandwidth() {
 	bw_summary
 }
 
+# --- Get Off My Lawn ---------------------------------------------------------
+GOML_DIR=run/goml
+GOML_ANCHOR=goml:makeshift_claim_anchor
+# JfrShare groups: GOML with the libraries its jar bundles, Polymer, and
+# Ferrite for reference. "$goml$" and the like catch mixin handlers, which
+# are merged into game classes under the mod's id.
+JFR_GROUPS=(
+	'goml=draylar.goml,$goml$,com.jamieswhiteshirt.rtree3i,org.ladysnake.cca,io.github.ladysnake.pal,eu.pb4.sgui,eu.pb4.placeholders,eu.pb4.common.protection,xyz.nucleoid.server.translations'
+	'polymer=eu.pb4.polymer,$polymer'
+	'ferrite=me.apika,$ferrite$'
+)
+GC_FRESH_Z=3000
+GC_SPAWN_Y=
+
+game_pid() { jcmd -l | awk '/devlaunchinjector|KnotServer|knot/ {print $1; exit}'; }
+
+# goml_mods on|off: GOML and Polymer in run/mods, or not.
+goml_mods() {
+	local j
+	for j in "$GOML_DIR"/*.jar; do
+		[ -f "$j" ] || fail "no GOML or Polymer jar in $GOML_DIR"
+		if [ "$1" = on ]; then cp "$j" run/mods/; else rm -f "run/mods/$(basename "$j")"; fi
+	done
+}
+
+# The mods in run/goml, the jars nested in them, and their common and
+# server mixins.
+goml_report() {
+	python3 - "$GOML_DIR" <<'PY' | tee -a "$REPORT"
+import io, json, os, sys, zipfile
+def walk(name, zf, depth):
+    pad = "  " * depth
+    try:
+        meta = json.loads(zf.read("fabric.mod.json").decode("utf-8", "replace"), strict=False)
+    except (KeyError, ValueError):
+        meta = None
+    if meta:
+        print(f"[goml] {pad}{meta.get('id')} {meta.get('version')} ({name})")
+        for m in meta.get("mixins", []):
+            c = m if isinstance(m, str) else m.get("config")
+            if isinstance(m, dict) and m.get("environment") == "client":
+                continue
+            try:
+                cfg = json.loads(zf.read(c).decode("utf-8", "replace"), strict=False)
+            except (KeyError, ValueError, TypeError):
+                continue
+            ms = sorted(cfg.get("mixins", []) + cfg.get("server", []))
+            print(f"[goml] {pad}  {c} ({cfg.get('package')}, {len(ms)}): {', '.join(ms)}")
+    for n in zf.namelist():
+        if n.startswith("META-INF/jars/") and n.endswith(".jar"):
+            walk(os.path.basename(n), zipfile.ZipFile(io.BytesIO(zf.read(n))), depth + 1)
+for f in sorted(os.listdir(sys.argv[1])):
+    if f.endswith(".jar"):
+        walk(f, zipfile.ZipFile(os.path.join(sys.argv[1], f)), 0)
+PY
+}
+
+block_is() { rcon "execute if block $1 $2 $3 $4" | grep -q 'Test passed'; }
+
+# entity_pos <name or selector>: its block position, "x y z".
+entity_pos() {
+	rcon "data get entity $1 Pos" | python3 -c '
+import math, re, sys
+v = re.findall(r"(-?[0-9.]+)d", sys.stdin.read())
+print(*(math.floor(float(x)) for x in v[:3]))'
+}
+
+# spawn_pos: the world spawn, where the console's commands run, "x y z".
+spawn_pos() {
+	rcon 'summon minecraft:marker ~ ~ ~ {Tags:["ferrite_spawn"]}' > /dev/null
+	entity_pos '@e[type=minecraft:marker,tag=ferrite_spawn,limit=1]'
+	rcon 'kill @e[type=minecraft:marker,tag=ferrite_spawn]' > /dev/null
+}
+
+# bench_player <x> <z>: a bench player standing at x z; prints its name.
+bench_player() {
+	rcon "ferrite bench players add idle $1 $2 0" | sed -n 's/.*\] \(bench[0-9]*\) joined.*/\1/p'
+}
+
+# claim_at <player> <x> <y> <z>: the player places a makeshift claim anchor
+# (radius 10) on the block at x y z. The anchor stands at y+1, and the
+# claim covers 10 blocks around it every way. An anchor without a claim
+# removes itself, so one still there 3 s later is a claim.
+claim_at() {
+	local out
+	out=$(rcon "ferrite bench players use $1 $2 $3 $4 $GOML_ANCHOR")
+	echo "[$SCENARIO] $out" | tee -a "$REPORT"
+	sleep 3
+	block_is "$2" "$(($3 + 1))" "$4" "$GOML_ANCHOR" || fail "no claim anchor at $2 $(($3 + 1)) $4 after placing it: $out"
+}
+
+goml() {
+	goml_mods on
+	goml_report
+	configure_geyser
+	start_server
+	grep -iE 'goml|get off my lawn|polymer' "$LOG" | grep -viE 'debug' | head -20 | tee -a "$REPORT" || true
+
+	bot_start FerriteBot1 900
+	bot_wait_spawn FerriteBot1 120
+	local player stranger bx by bz y spot where cx cz out count errs chunks0 chunks1
+	player=$(java_name FerriteBot1)
+	[ -n "$player" ] || fail "FerriteBot1 spawned but is not in /list"
+	rcon "op $player" "gamemode creative $player" > /dev/null
+	read -r bx by bz < <(entity_pos "$player")
+	echo "[goml] Bedrock bot $player at $bx $by $bz" | tee -a "$REPORT"
+
+	# A glass platform 40 blocks above the bot, the air above it cleared.
+	# The bot claims its west part: x and z within 10 of bx bz, y within 10
+	# of the anchor at y+1.
+	y=$((by + 40))
+	rcon "fill $((bx - 14)) $((y + 1)) $((bz - 14)) $((bx + 40)) $((y + 6)) $((bz + 14)) minecraft:air" \
+		"fill $((bx - 14)) $y $((bz - 14)) $((bx + 40)) $y $((bz + 14)) minecraft:glass" | sed "s/^/[goml] /" | tee -a "$REPORT"
+	claim_at "$player" "$bx" "$y" "$bz"
+	stranger=$(bench_player "$((bx + 30))" "$bz")
+	[ -n "$stranger" ] || fail "no bench player to be the stranger"
+
+	# Placing a block: the owner can, a stranger can't; outside, the stranger can.
+	rcon "ferrite bench players use $player $((bx + 3)) $y $((bz - 3)) minecraft:stone" \
+		"ferrite bench players use $stranger $((bx + 3)) $y $((bz + 3)) minecraft:stone" \
+		"ferrite bench players use $stranger $((bx + 20)) $y $((bz + 8)) minecraft:stone" | sed "s/^/[goml] /" | tee -a "$REPORT"
+	block_is $((bx + 3)) $((y + 1)) $((bz - 3)) minecraft:stone || fail "the claim's owner could not place a block in it"
+	block_is $((bx + 3)) $((y + 1)) $((bz + 3)) minecraft:stone && fail "a stranger placed a block in the claim"
+	block_is $((bx + 20)) $((y + 1)) $((bz + 8)) minecraft:stone || fail "the stranger could not place a block outside the claim (the control)"
+	echo "[goml] placing: the owner in the claim yes, a stranger in it no, the stranger outside yes" | tee -a "$REPORT"
+
+	# TNT in a ring of stone, inside the claim and outside it.
+	for spot in "in $((bx + 6)) $((bz + 6))" "out $((bx + 30)) $((bz - 8))"; do
+		read -r where cx cz <<< "$spot"
+		rcon "fill $((cx - 1)) $((y + 1)) $((cz - 1)) $((cx + 1)) $((y + 1)) $((cz + 1)) minecraft:stone" \
+			"setblock $cx $((y + 1)) $cz minecraft:air" \
+			"summon minecraft:tnt $cx $((y + 1)) $cz {fuse:0}" > /dev/null
+	done
+	sleep 3
+	block_is $((bx + 5)) $((y + 1)) $((bz + 6)) minecraft:stone && block_is $((bx + 7)) $((y + 1)) $((bz + 6)) minecraft:stone \
+		|| fail "TNT broke stone inside the claim"
+	if block_is $((bx + 29)) $((y + 1)) $((bz - 8)) minecraft:stone && block_is $((bx + 31)) $((y + 1)) $((bz - 8)) minecraft:stone; then
+		fail "TNT broke no stone outside the claim (the control)"
+	fi
+	echo "[goml] TNT: the claim's stone stayed, the stone outside broke" | tee -a "$REPORT"
+
+	# Water 2 blocks east of the claim's edge (x bx+10).
+	rcon "setblock $((bx + 12)) $((y + 1)) $((bz - 10)) minecraft:water" > /dev/null
+	sleep 10
+	block_is $((bx + 11)) $((y + 1)) $((bz - 10)) minecraft:water || fail "water did not spread toward the claim (the control)"
+	block_is $((bx + 14)) $((y + 1)) $((bz - 10)) minecraft:water || fail "water did not spread away from the claim (the control)"
+	block_is $((bx + 10)) $((y + 1)) $((bz - 10)) minecraft:water && fail "water flowed into the claim"
+	echo "[goml] water: stopped at the claim's edge, spread outside" | tee -a "$REPORT"
+
+	# A pen of 30 husks in the claim.
+	local cmds=("fill $((bx - 7)) $((y + 1)) $((bz - 7)) $((bx - 5)) $((y + 5)) $((bz - 5)) minecraft:glass hollow")
+	for _ in $(seq 30); do
+		cmds+=("summon minecraft:husk $((bx - 6)) $((y + 2)) $((bz - 6)) {Tags:[\"goml_pile\"],PersistenceRequired:1b}")
+	done
+	rcon "${cmds[@]}" | sort | uniq -c
+	sleep 45
+	out=$(rcon "execute if entity @e[type=minecraft:husk,tag=goml_pile]")
+	count=$(echo "$out" | sed -n 's/.*[Cc]ount: \([0-9]*\).*/\1/p')
+	echo "$out" | grep -q 'Test failed' && count=0
+	echo "[goml] husk pile in the claim: ${count:-?} of 30 left after 45 s" | tee -a "$REPORT"
+	[ -n "$count" ] && [ "$count" -lt 30 ] || fail "no cramming deaths in the claim"
+
+	# The Bedrock player, next to the claim's anchor (a Polymer block).
+	errs=$(bot_field FerriteBot1 errors)
+	echo "[goml] bot: chunks $(bot_field FerriteBot1 chunks), entities added $(bot_field FerriteBot1 entities_added), errors $errs" | tee -a "$REPORT"
+	[ "$(bot_field FerriteBot1 disconnected)" = None ] || fail "the bot was disconnected next to the claim"
+	[ "$errs" = "[]" ] || fail "the Bedrock client logged errors: $errs"
+
+	# Flight through fresh terrain.
+	chunks0=$(bot_field FerriteBot1 chunks)
+	rcon "ferrite bench players drive $player elytra 20000 0 -90" | tee -a "$REPORT"
+	sleep 90
+	rcon "ferrite bench players status" | sed "s/^/[goml] /" | tee -a "$REPORT"
+	rcon "ferrite bench players clear" > /dev/null
+	sleep 10
+	chunks1=$(bot_field FerriteBot1 chunks)
+	echo "[goml] chunks received: $chunks0 before the flight, $chunks1 after" | tee -a "$REPORT"
+	[ "$((chunks1 - chunks0))" -ge 100 ] || fail "fewer than 100 chunks reached the Bedrock player in a 90 s flight"
+	rcon "ferrite compat status" | sed "s/^/[goml] /" | tee -a "$REPORT"
+
+	bot_stop FerriteBot1
+	stop_server
+}
+
+# 15 claims around spawn, 24 blocks apart (a 4x4 grid less a corner), owned
+# by a bench player. One covers the spawn point and the husk pen.
+gc_claims() {
+	local owner i j x z n=0
+	owner=$(bench_player "$BW_SPAWN_X" "$BW_SPAWN_Z")
+	[ -n "$owner" ] || fail "no bench player to own the claims"
+	for i in 0 1 2 3; do
+		for j in 0 1 2 3; do
+			[ "$i$j" != 33 ] || continue
+			x=$((BW_SPAWN_X - 22 + 24 * i))
+			z=$((BW_SPAWN_Z - 22 + 24 * j))
+			rcon "setblock $x $GC_SPAWN_Y $z minecraft:glass" "setblock $x $((GC_SPAWN_Y + 1)) $z minecraft:air" \
+				"ferrite bench players use $owner $x $GC_SPAWN_Y $z $GOML_ANCHOR" > /dev/null
+		done
+	done
+	sleep 3
+	for i in 0 1 2 3; do
+		for j in 0 1 2 3; do
+			[ "$i$j" != 33 ] || continue
+			if block_is $((BW_SPAWN_X - 22 + 24 * i)) $((GC_SPAWN_Y + 1)) $((BW_SPAWN_Z - 22 + 24 * j)) "$GOML_ANCHOR"; then
+				n=$((n + 1))
+			fi
+		done
+	done
+	echo "[goml-cost] $n of 15 claims placed around spawn" | tee -a "$REPORT"
+	[ "$n" -eq 15 ] || fail "only $n of 15 claims were placed"
+	rcon "ferrite bench players clear" > /dev/null
+}
+
+# gc_block <none|goml> <run>: a copy of the base world, GOML on or off, then
+# the four arms under JFR.
+gc_block() {
+	local set=$1 label="$1$2"
+	rm -rf run/world
+	cp -a run/world-base run/world
+	goml_mods "$([ "$set" = goml ] && echo on || echo off)"
+	start_server
+	if [ "$set" = goml ]; then gc_claims; fi
+	bw_warmup
+	jcmd "$(game_pid)" JFR.start name=goml settings="$PWD/goml.jfc" filename="$PWD/goml-cost-$label.jfr" > /dev/null \
+		|| echo "JFR did not start for $label"
+	BW_SET=$set BW_METER=off bw_arm_java "$label-java-idle" idle
+	BW_SET=$set BW_METER=off bw_arm_java "$label-java-elytra" elytra
+	BW_SET=$set BW_METER=off bw_arm_java "$label-java-fresh" elytra "$BW_START" "$GC_FRESH_Z" fresh
+	BW_SET=$set bw_arm_bedrock "$label-bedrock-elytra" 6 elytra
+	jcmd "$(game_pid)" JFR.stop name=goml > /dev/null || true
+	stop_server
+}
+
+gc_summary() {
+	echo "=== GOML and Polymer: none against goml, per arm (mean of runs; each run in brackets) ===" | tee -a "$REPORT"
+	python3 - "$REPORT" <<'PY' | tee -a "$REPORT"
+import re, sys
+from collections import defaultdict
+rows = defaultdict(list)
+for line in open(sys.argv[1]):
+    if line.startswith("[bw] ") and " set=none " in line or line.startswith("[bw] ") and " set=goml " in line:
+        f = dict(re.findall(r"(\w+)=(\S*)", line))
+        rows[(f["client"], f["activity"], f["set"])].append(f)
+def num(r, k):
+    try:
+        return float(r.get(k) or 0)
+    except ValueError:
+        return 0.0
+metrics = [
+    ("tick ms mean", lambda r: num(r, "mspt")),
+    ("tick ms p95", lambda r: num(r, "p95")),
+    ("server ms/s", lambda r: num(r, "server_ms_s")),
+    ("worldgen ms/s", lambda r: num(r, "worldgen_ms_s")),
+    ("geyser ms/s", lambda r: num(r, "geyser_ms_s")),
+    ("total ms/s", lambda r: num(r, "total_ms_s")),
+    ("chunks/s/player", lambda r: num(r, "chunks") / num(r, "seconds") / num(r, "players")),
+    ("Mbit/s/player", lambda r: num(r, "down_bytes") * 8 / num(r, "seconds") / num(r, "players") / 1e6),
+]
+arms = sorted({(c, a) for c, a, _ in rows}, key=lambda k: (k[0] != "java", ["idle", "elytra", "fresh"].index(k[1]) if k[1] in ("idle", "elytra", "fresh") else 9))
+print("%-15s %-16s %-24s %-24s %9s" % ("arm", "metric", "none", "goml", "goml-none"))
+for client, act in arms:
+    none, goml = rows.get((client, act, "none"), []), rows.get((client, act, "goml"), [])
+    for name, fn in metrics:
+        if name.startswith("Mbit") and client != "bedrock":
+            continue
+        vn, vg = [fn(r) for r in none], [fn(r) for r in goml]
+        mn = sum(vn) / len(vn) if vn else float("nan")
+        mg = sum(vg) / len(vg) if vg else float("nan")
+        fmt = lambda m, v: "%.2f [%s]" % (m, " ".join("%.2f" % x for x in v))
+        print("%-15s %-16s %-24s %-24s %+9.2f" % (client + " " + act, name, fmt(mn, vn), fmt(mg, vg), mg - mn))
+PY
+}
+
+gc_jfr() {
+	local f
+	echo "=== JFR: share of execution samples with a frame in GOML (and its bundled libraries), Polymer, Ferrite ===" | tee -a "$REPORT"
+	for f in goml-cost-*.jfr; do
+		[ -f "$f" ] || continue
+		echo "[jfr] $f" | tee -a "$REPORT"
+		java scripts/JfrShare.java "$f" "${JFR_GROUPS[@]}" 2> /dev/null | sed "s/^/[jfr] /" | tee -a "$REPORT" || echo "[jfr] could not read $f"
+	done
+}
+
+goml_cost() {
+	sudo -n sysctl -qw kernel.sched_autogroup_enabled=0 2>/dev/null || echo "could not turn scheduler autogroups off"
+	# profile.jfc with Java execution sampling at 5 ms, every thread.
+	sed -E '/<event name="jdk.ExecutionSample">/,/<\/event>/ s#<setting name="(period|throttle)"([^>]*)>[^<]*</setting>#<setting name="\1"\2>5 ms</setting>#' \
+		"$JAVA_HOME/lib/jfr/profile.jfc" > goml.jfc
+	goml_report
+	goml_mods off
+	configure_geyser
+	start_server
+	calibrate
+	pregen_corridor "$BW_X" 9
+	bw_setup
+	# Husks at spawn for the idle arms (the console runs at world spawn).
+	local cmds=("fill ~4 ~ ~4 ~6 ~4 ~6 minecraft:glass hollow") spec set n
+	for _ in $(seq 30); do
+		cmds+=("summon minecraft:husk ~5 ~1 ~5 {PersistenceRequired:1b}")
+	done
+	for _ in $(seq 20); do
+		cmds+=("summon minecraft:husk ~-6 ~ ~-6 {PersistenceRequired:1b}")
+	done
+	rcon "${cmds[@]}" | sort | uniq -c | tee -a "$REPORT"
+	read -r BW_SPAWN_X GC_SPAWN_Y BW_SPAWN_Z < <(spawn_pos)
+	[ -n "$BW_SPAWN_Z" ] || fail "could not read the world spawn"
+	echo "[goml-cost] spawn at $BW_SPAWN_X $GC_SPAWN_Y $BW_SPAWN_Z" | tee -a "$REPORT"
+	stop_server
+	rm -rf run/world-base
+	cp -a run/world run/world-base
+	for spec in "none 1" "goml 1" "none 2" "goml 2"; do
+		read -r set n <<< "$spec"
+		gc_block "$set" "$n"
+	done
+	gc_summary
+	gc_jfr
+}
+
 case "$SCENARIO" in
 	full|features-off) compat ;;
 	cost) cost ;;
 	cost-c1) GEYSER_COMPRESSION=1 cost ;;
 	bandwidth) bandwidth ;;
+	goml) goml ;;
+	goml-cost) goml_cost ;;
 	*) fail "unknown scenario $SCENARIO" ;;
 esac
 stop_spin

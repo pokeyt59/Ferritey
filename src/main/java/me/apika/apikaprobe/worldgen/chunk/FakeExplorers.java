@@ -11,7 +11,10 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundChunkBatchFinishedPacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
@@ -22,11 +25,18 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Players for the CI replica bench: real ServerPlayers, joined through
@@ -71,8 +81,9 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * a new count (bytes and chunks since then).
  *
  * /ferrite bench players add <mode> <x> <z> <heading>|drive <player>
- * <mode> <x> <z> <heading>|meter on|off|reset|clear|status. Modes: idle,
- * walk, horse, elytra, boat. Nothing runs unless the command is used.
+ * <mode> <x> <z> <heading>|meter on|off|reset|use <player> <x> <y> <z>
+ * <item>|clear|status. Modes: idle, walk, horse, elytra, boat. Nothing
+ * runs unless the command is used.
  */
 public final class FakeExplorers {
 	private FakeExplorers() {}
@@ -203,6 +214,27 @@ public final class FakeExplorers {
 		explorers.add(new Explorer(player, null, mode, x, y, z, headingDeg));
 		return String.format("[bench-players] driving %s as %s from %.0f %.0f heading %.0f", playerName,
 				mode.name().toLowerCase(java.util.Locale.ROOT), x, z, headingDeg);
+	}
+
+	/**
+	 * Has a player (by name) use an item on the top face of the block at
+	 * x y z, as a click from its client would: the item goes in its main
+	 * hand first. For CI checks of mods whose blocks only work when a
+	 * player places them (a claim anchor, in scripts/ci-geyser.sh).
+	 */
+	public static synchronized String use(ServerLevel level, MinecraftServer server, String playerName,
+			int x, int y, int z, String itemId) {
+		ServerPlayer player = server.getPlayerList().getPlayerByName(playerName);
+		if (player == null) return "[bench-players] no player " + playerName;
+		Identifier id = Identifier.tryParse(itemId.trim());
+		Item item = id != null && BuiltInRegistries.ITEM.containsKey(id) ? BuiltInRegistries.ITEM.getValue(id) : null;
+		if (item == null) return "[bench-players] no item " + itemId;
+		ItemStack stack = new ItemStack(item);
+		player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+		BlockPos pos = new BlockPos(x, y, z);
+		BlockHitResult hit = new BlockHitResult(new Vec3(x + 0.5, y + 1.0, z + 0.5), Direction.UP, pos, false);
+		InteractionResult result = player.gameMode.useItemOn(player, level, stack, InteractionHand.MAIN_HAND, hit);
+		return String.format("[bench-players] %s used %s on %d %d %d: %s", playerName, id, x, y, z, result);
 	}
 
 	/**

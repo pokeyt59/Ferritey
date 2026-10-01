@@ -368,6 +368,23 @@ public final class FerriteCommand {
 																							IntegerArgumentType.getInteger(ctx, "heading")), false);
 																					return Command.SINGLE_SUCCESS;
 																				})))))))
+								// A player uses an item on a block, as its client would (placing a mod's block in CI).
+								.then(Commands.literal("use")
+										.then(Commands.argument("player", StringArgumentType.word())
+												.then(Commands.argument("x", IntegerArgumentType.integer())
+														.then(Commands.argument("y", IntegerArgumentType.integer())
+																.then(Commands.argument("z", IntegerArgumentType.integer())
+																		.then(Commands.argument("item", StringArgumentType.greedyString())
+																				.executes(ctx -> {
+																					sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.use(
+																							ctx.getSource().getLevel(), ctx.getSource().getServer(),
+																							StringArgumentType.getString(ctx, "player"),
+																							IntegerArgumentType.getInteger(ctx, "x"),
+																							IntegerArgumentType.getInteger(ctx, "y"),
+																							IntegerArgumentType.getInteger(ctx, "z"),
+																							StringArgumentType.getString(ctx, "item")), false);
+																					return Command.SINGLE_SUCCESS;
+																				})))))))
 								.then(Commands.literal("clear").executes(ctx -> {
 									sendFeedback(ctx, me.apika.apikaprobe.worldgen.chunk.FakeExplorers.clear(ctx.getSource().getServer()), false);
 									return Command.SINGLE_SUCCESS;
