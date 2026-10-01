@@ -498,9 +498,37 @@ bw_record() {
 
 cpu_field() { sed -n "s/.* $1=[0-9]* ms (\([0-9.]*\) ms\/s).*/\1/p" | head -1; }
 
+# bot_try_spawn <name> <limit>: as bot_wait_spawn, but returns 1 instead of
+# failing the job.
+bot_try_spawn() {
+	local name=$1 limit=$2 waited=0
+	until grep -q '"bot":"spawned"' "$BOTS/$name.jsonl" 2>/dev/null; do
+		sleep 1
+		waited=$((waited + 1))
+		kill -0 "${BOT_PID[$name]}" 2>/dev/null || return 1
+		[ "$waited" -lt "$limit" ] || return 1
+	done
+}
+
+# bot_wait_or_retry <name> <duration> <every>: waits for a started client to
+# spawn; if it could not join, records why (the report counts them) and
+# starts it once more, which must then join.
+JOIN_RETRIES=0
+bot_wait_or_retry() {
+	bot_try_spawn "$1" 120 && return 0
+	JOIN_RETRIES=$((JOIN_RETRIES + 1))
+	echo "::warning::$1 could not join: $(grep -hE 'disconnect|Error|error' "$BOTS/$1.jsonl" | tail -n 1 | cut -c1-300)" | tee -a "$REPORT"
+	kill -TERM "${BOT_PID[$1]}" 2>/dev/null || true
+	wait "${BOT_PID[$1]}" 2>/dev/null || true
+	unset "BOT_PID[$1]"
+	mv "$BOTS/$1.jsonl" "$BOTS/$1.failed-$JOIN_RETRIES.jsonl"
+	bot_start "$1" "$2" "$3" bedrock
+	bot_wait_spawn "$1" 120
+}
+
 bw_warmup() {
 	bot_start WarmBot 60 10 bedrock
-	bot_wait_spawn WarmBot 120
+	bot_wait_or_retry WarmBot 60 10
 	sleep 20
 	bot_stop WarmBot
 	sleep 5
@@ -511,7 +539,7 @@ bw_arm_bedrock() {
 	local label=$1 level=$2 activity=$3 i name player out cpu down up chunks=0 c
 	declare -A c0
 	for i in 1 2 3; do bot_start "BwBot$i" 400 2 bedrock; done
-	for i in 1 2 3; do bot_wait_spawn "BwBot$i" 120; done
+	for i in 1 2 3; do bot_wait_or_retry "BwBot$i" 400 2; done
 	for i in 1 2 3; do
 		name="BwBot$i"
 		player=$(java_name "$name")
@@ -951,8 +979,9 @@ gc_claims() {
 # the four arms under JFR.
 gc_block() {
 	local set=$1 label="$1$2"
-	rm -rf run/world
+	rm -rf run/world run/config run/polymer
 	cp -a run/world-base run/world
+	cp -a run/config-base run/config
 	goml_mods "$([ "$set" = goml ] && echo on || echo off)"
 	start_server
 	if [ "$set" = goml ]; then gc_claims; fi
@@ -1046,14 +1075,17 @@ goml_cost() {
 	echo "[goml-cost] spawn at $BW_SPAWN_X $GC_SPAWN_Y $BW_SPAWN_Z" | tee -a "$REPORT"
 	rcon "forceload remove all" > /dev/null
 	stop_server
-	rm -rf run/world-base
+	# Every block starts from these: the world and the mods' configs.
+	rm -rf run/world-base run/config-base
 	cp -a run/world run/world-base
+	cp -a run/config run/config-base
 	for spec in "none 1" "goml 1" "none 2" "goml 2"; do
 		read -r set n <<< "$spec"
 		gc_block "$set" "$n"
 	done
 	gc_summary
 	gc_jfr
+	echo "[goml-cost] Bedrock joins that failed and were retried: $JOIN_RETRIES" | tee -a "$REPORT"
 }
 
 case "$SCENARIO" in
