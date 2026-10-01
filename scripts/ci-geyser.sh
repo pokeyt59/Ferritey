@@ -326,6 +326,14 @@ compat() {
 	[ "$((added1 - added0))" -ge 40 ] || fail "the bot saw fewer than 40 of the 50 husks"
 	[ "$((moves1 - moves0))" -gt 0 ] || fail "the bot saw no entity move"
 
+	# Fluids: water on a glass pad 40 blocks above the bot spreads.
+	local bpos water bx by bz
+	bpos=$(entity_pos "$player")
+	read -r bx by bz <<< "$bpos"
+	water=$(water_probe "$bx" "$((by + 40))" "$bz")
+	echo "[$SCENARIO] water placed above the bot: $water" | tee -a "$REPORT"
+	[ "$water" = spread ] || fail "water placed above the bot did not spread"
+
 	# Flight through fresh terrain, with the chunk-wait guards (full).
 	local chunks0 chunks1
 	chunks0=$(bot_field FerriteBot1 chunks)
@@ -723,6 +731,21 @@ PY
 
 block_is() { rcon "execute if block $1 $2 $3 $4" | grep -q 'Test passed'; }
 
+# water_probe <x> <y> <z>: a water source on a 5x5 glass pad at x y z (the
+# water one block above it); prints "spread" if it reached a neighbour
+# within 10 s, else "stuck".
+water_probe() {
+	rcon "fill $(($1 - 2)) $2 $(($3 - 2)) $(($1 + 2)) $2 $(($3 + 2)) minecraft:glass" \
+		"fill $(($1 - 2)) $(($2 + 1)) $(($3 - 2)) $(($1 + 2)) $(($2 + 2)) $(($3 + 2)) minecraft:air" \
+		"setblock $1 $(($2 + 1)) $3 minecraft:water" > /dev/null
+	sleep 10
+	if block_is $(($1 + 1)) $(($2 + 1)) "$3" minecraft:water || block_is $(($1 - 1)) $(($2 + 1)) "$3" minecraft:water; then
+		echo spread
+	else
+		echo stuck
+	fi
+}
+
 # entity_pos <name or selector>: its block position, "x y z".
 entity_pos() {
 	rcon "data get entity $1 Pos" | python3 -c '
@@ -801,6 +824,9 @@ goml() {
 	y=$((by + 40))
 	rcon "fill $((bx - 14)) $((y + 1)) $((bz - 14)) $((bx + 40)) $((y + 6)) $((bz + 14)) minecraft:air" \
 		"fill $((bx - 14)) $y $((bz - 14)) $((bx + 40)) $y $((bz + 14)) minecraft:glass" | sed "s/^/[goml] /" | tee -a "$REPORT"
+	# Fluids before any claim exists (GOML and Polymer loaded).
+	out=$(water_probe "$((bx - 30))" "$y" "$bz")
+	echo "[goml] water before any claim: $out" | tee -a "$REPORT"
 	claim_at "$player" "$bx" "$y" "$bz"
 	stranger=$(bench_player "$((bx + 30))" "$bz")
 	[ -n "$stranger" ] || fail "no bench player to be the stranger"
