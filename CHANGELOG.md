@@ -537,6 +537,44 @@ marks pre-release research builds.
   - **Left out:** the first level 6 standing arm. Its players were
     still receiving the spawn area (489 chunks while the worldgen
     threads worked), so it measured a join, not standing.
+- What Get Off My Lawn ReServed and Polymer cost (Geyser job,
+  `goml-cost` leg, laptop model at 2×). The leg ran blocks without them
+  and with them, alternating twice; each block started from a copy of
+  one world and had a 60 s arm per activity, with three players:
+  - Java players standing among husks;
+  - Java players at elytra speed over a pregenerated corridor;
+  - Java players at elytra speed over fresh terrain (the same terrain
+    in every block);
+  - Bedrock players at elytra speed over the corridor.
+
+  The GOML blocks had 15 claims around spawn.
+
+  | Per arm, mean of 2 runs | Without | With GOML and Polymer |
+  |---|---|---|
+  | Java at elytra speed, tick mean / p95 | 11.9 / 25.8 ms | 12.3 / 26.7 ms |
+  | Bedrock at elytra speed, tick mean / p95 | 9.3 / 18.7 ms | 10.0 / 22.1 ms |
+  | Bedrock at elytra speed, server thread | 154 ms/s | 165 ms/s |
+  | Bedrock at elytra speed, Geyser's threads | 272 ms/s | 271 ms/s |
+  | Bedrock at elytra speed, upload per player | 1.55 Mbit/s | 1.57 Mbit/s |
+  | Chunks per player at elytra speed, Java / Bedrock | 45.9 / 49.3 | 44.0 / 49.5 |
+
+  - **Where the time goes (JFR).** In the GOML blocks:
+    - **GOML** (with the libraries it bundles) was in 0.14% and 0.18%
+      of the server thread's samples, and in no worldgen sample;
+    - **Polymer** was in 6.4% and 6.7% of the server thread's samples
+      and in 1.7% and 2.0% of Geyser's threads';
+    - **Ferrite**, for comparison, was in 5.0% to 5.4% of the server
+      thread's samples.
+
+    So almost all of the cost is Polymer's per-player packet work, not
+    the claims.
+  - **Placing 15 claims** gave 11 ticks over 100 ms, the longest 1.3 and
+    1.5 s in the two blocks: GOML's web-map marker, which fetches each
+    owner's skin on the server thread.
+  - **Noise.** Standing and fresh-terrain arms were dominated by
+    generating terrain (the idle players loaded spawn's surroundings).
+    Their server-thread time did not differ (111 against 112 ms/s
+    standing). Every Bedrock client joined at the first attempt.
 
 ### CI
 - Rust tests run on every push, and a headless dedicated-server smoke

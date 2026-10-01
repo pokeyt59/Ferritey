@@ -547,6 +547,14 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
     thread. CI measured ticks of 1,055 to 2,131 ms when the claim was
     placed.
 
+  **What they cost** (`goml-cost` leg, laptop model; the changelog has
+  the table):
+  - GOML's own code was in 0.15% of the server thread's samples.
+  - Polymer was in 6.5% of the server thread's samples, and 2% of
+    Geyser's threads'. At elytra speed that was about 0.5 ms more per
+    tick for Java players and 0.7 ms for Bedrock players.
+  - Upload per player and Geyser's CPU did not change.
+
   Polymer logs "Some mod tried to create a chunk update packet, without
   the packet context present" when one of Ferrite's bench players
   joins. Those players have no real connection; real Java and Bedrock
