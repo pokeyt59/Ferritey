@@ -5,7 +5,6 @@
 # "@grep <jar-name-regex> <text>" lists the methods whose bytecode contains the text.
 # Mod jars come from scripts/worldgen-mods.txt, fetched by the inspect job.
 # The job log keeps only its last 5000 lines: keep the list short.
-net.minecraft.world.level.ServerExplosion (explode|calculateExplodedPositions)
-@list lithium .*[Ee]xplo.*\.class$
-@list servercore .*[Ee]xplo.*\.class$
-@list scalablelux .*[Ee]xplo.*\.class$
+net.minecraft.server.commands.SetBlockCommand (setBlock|lambda.*)
+net.minecraft.world.level.block.LiquidBlock (onPlace|neighborChanged|shouldSpreadLiquid)
+net.minecraft.world.level.chunk.LevelChunk setBlockState
