@@ -497,6 +497,60 @@ From a source read of each mod's 26.2 branch against Ferrite's hooks.
 
   The only Geyser errors in the log are its warning that Xbox login
   checks are off, which the test needs.
+- **Get Off My Lawn ReServed and Polymer (claims).** Tested with the
+  build of the target server's fork (`pokeyt59/get-off-my-lawn-reserved`
+  at `a0a3c01`, the same as upstream's 26.2 update) and Polymer 0.17.5,
+  which it needs. No method is hooked by both:
+  - **GOML hooks** `Entity.isInvulnerableToBase`, `saveWithoutId` and
+    `load`, `ServerLevel.addEntity`, `FlowingFluid.spreadTo`, fire,
+    explosions, pistons, falling blocks, the sweep attack, Endermen,
+    Villagers and some items.
+  - **Ferrite's** `Entity` and `ServerLevel` mixins hook other methods of
+    those classes.
+  - **Polymer's** many mixins are about packets, registries and its
+    virtual entities; Ferrite has no hook in the network code.
+
+  Tested end to end in CI (`goml` leg of the Geyser job, commit tag
+  `[geyser:goml]`), with Geyser, Floodgate and the target server's mods.
+  The Bedrock client claims a glass platform by placing a claim anchor;
+  a bench player is the stranger. Every check has a control outside the
+  claim, and all passed:
+  - **Placing:** the owner can place a block in the claim, the stranger
+    can't, and the stranger can outside it.
+  - **Fluids:** water spreading toward the claim stops at its edge and
+    spreads everywhere else.
+  - **Cramming:** a pen of 30 husks in the claim crams (24 left after
+    45 s). Cramming damage has no attacker, so GOML lets it through.
+  - **The Bedrock player** stays connected beside the claim's anchor (a
+    Polymer block) with no client errors, and then receives 3,584 chunks
+    in a 90 s flight.
+  - **No mixin error** from any mod.
+
+  Two things the leg found are not Ferrite's:
+  - **With Lithium, claims do not stop explosions.** TNT broke stone
+    inside the claim as well as outside. Lithium's explosion raycast
+    (`mixin.world.explosions.block_raycast`) adds the blocks an explosion
+    breaks in a callback at the end of
+    `ServerExplosion.calculateExplodedPositions`. GOML removes claimed
+    blocks from that list at the same point, but its mixin's priority
+    (800) makes its callback run first, before Lithium has filled the
+    list. With `mixin.world.explosions.block_raycast=false` in
+    `config/lithium.properties`, the claim kept its stone and the stone
+    outside broke. In GOML, the fix is to filter after Lithium: a
+    priority above 1000 on `ServerExplosionMixin`, or filtering the list
+    where `explode` passes it on.
+  - **Creating a claim freezes the server for 1 to 2 s.** GOML builds a
+    web-map marker for every claim (when one is created or changed, and
+    for all claims at server start) even with no web-map mod installed.
+    Building one fetches the owner's skin from Mojang over HTTPS and
+    renders the head with Java's desktop graphics, all on the server
+    thread. CI measured ticks of 1,055 to 2,131 ms when the claim was
+    placed.
+
+  Polymer logs "Some mod tried to create a chunk update packet, without
+  the packet context present" when one of Ferrite's bench players
+  joins. Those players have no real connection; real Java and Bedrock
+  players don't trigger it.
 - **Logging setups (Log4j).** Ferrite adds a Log4j logger config named
   `ferrite` at launch that sends its lines to `logs/ferrite.log` and only
   warnings and errors to the root logger's appenders (console,
