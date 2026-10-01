@@ -49,8 +49,10 @@
 #                 players use); a bench player who does not own it is the
 #                 stranger. Each check has a control outside the claim:
 #                 the owner can place a block in it and the stranger can't;
-#                 TNT leaves the claim's stone and breaks the same stone
-#                 outside; water from outside does not flow in but flows
+#                 TNT breaks stone outside but not in the claim (checked
+#                 after a restart with Lithium's explosion raycast off,
+#                 which adds broken blocks after GOML's filter; with it on,
+#                 the result is recorded); water from outside does not flow in but flows
 #                 the other way; a pen of husks in the claim crams; the bot
 #                 stays connected and then gets chunks all through a 90 s
 #                 flight over fresh terrain. No mixin error from any mod.
@@ -753,6 +755,30 @@ claim_at() {
 	block_is "$2" "$(($3 + 1))" "$4" "$GOML_ANCHOR" || fail "no claim anchor at $2 $(($3 + 1)) $4 after placing it: $out"
 }
 
+# tnt_test <bx> <y> <z inside> <z outside>: primed TNT in a ring of stone
+# 6 blocks east of the claim's anchor column (inside the claim) and 30
+# blocks east (outside), at the given z; prints what became of the stone
+# beside each.
+tnt_test() {
+	local bx=$1 y=$2 spot cx cz inside outside
+	for spot in "$(($1 + 6)) $3" "$(($1 + 30)) $4"; do
+		read -r cx cz <<< "$spot"
+		rcon "fill $((cx - 1)) $((y + 1)) $((cz - 1)) $((cx + 1)) $((y + 1)) $((cz + 1)) minecraft:stone" \
+			"setblock $cx $((y + 1)) $cz minecraft:air" \
+			"summon minecraft:tnt $cx $((y + 1)) $cz {fuse:0}" > /dev/null
+	done
+	sleep 3
+	inside=broken
+	if block_is $((bx + 5)) $((y + 1)) "$3" minecraft:stone && block_is $((bx + 7)) $((y + 1)) "$3" minecraft:stone; then
+		inside=kept
+	fi
+	outside=broken
+	if block_is $((bx + 29)) $((y + 1)) "$4" minecraft:stone && block_is $((bx + 31)) $((y + 1)) "$4" minecraft:stone; then
+		outside=kept
+	fi
+	echo "inside $inside, outside $outside"
+}
+
 goml() {
 	goml_mods on
 	goml_report
@@ -762,7 +788,7 @@ goml() {
 
 	bot_start FerriteBot1 900
 	bot_wait_spawn FerriteBot1 120
-	local player stranger bx by bz y spot where cx cz out count errs chunks0 chunks1
+	local player stranger bx by bz y out count errs chunks0 chunks1 tnt_lithium tnt_raycast_off
 	player=$(java_name FerriteBot1)
 	[ -n "$player" ] || fail "FerriteBot1 spawned but is not in /list"
 	rcon "op $player" "gamemode creative $player" > /dev/null
@@ -788,20 +814,12 @@ goml() {
 	block_is $((bx + 20)) $((y + 1)) $((bz + 8)) minecraft:stone || fail "the stranger could not place a block outside the claim (the control)"
 	echo "[goml] placing: the owner in the claim yes, a stranger in it no, the stranger outside yes" | tee -a "$REPORT"
 
-	# TNT in a ring of stone, inside the claim and outside it.
-	for spot in "in $((bx + 6)) $((bz + 6))" "out $((bx + 30)) $((bz - 8))"; do
-		read -r where cx cz <<< "$spot"
-		rcon "fill $((cx - 1)) $((y + 1)) $((cz - 1)) $((cx + 1)) $((y + 1)) $((cz + 1)) minecraft:stone" \
-			"setblock $cx $((y + 1)) $cz minecraft:air" \
-			"summon minecraft:tnt $cx $((y + 1)) $cz {fuse:0}" > /dev/null
-	done
-	sleep 3
-	block_is $((bx + 5)) $((y + 1)) $((bz + 6)) minecraft:stone && block_is $((bx + 7)) $((y + 1)) $((bz + 6)) minecraft:stone \
-		|| fail "TNT broke stone inside the claim"
-	if block_is $((bx + 29)) $((y + 1)) $((bz - 8)) minecraft:stone && block_is $((bx + 31)) $((y + 1)) $((bz - 8)) minecraft:stone; then
-		fail "TNT broke no stone outside the claim (the control)"
-	fi
-	echo "[goml] TNT: the claim's stone stayed, the stone outside broke" | tee -a "$REPORT"
+	# TNT inside the claim and outside it. Lithium's explosion raycast adds
+	# the blocks an explosion breaks at the end of the same method where
+	# GOML removes claimed ones, after GOML's hook (priority 800) has run:
+	# recorded here, and checked again below with that Lithium mixin off.
+	tnt_lithium=$(tnt_test "$bx" "$y" "$((bz + 6))" "$((bz - 8))")
+	echo "[goml] TNT with Lithium's explosion raycast on: $tnt_lithium" | tee -a "$REPORT"
 
 	# Water 2 blocks east of the claim's edge (x bx+10).
 	rcon "setblock $((bx + 12)) $((y + 1)) $((bz - 10)) minecraft:water" > /dev/null
@@ -843,6 +861,17 @@ goml() {
 	rcon "ferrite compat status" | sed "s/^/[goml] /" | tee -a "$REPORT"
 
 	bot_stop FerriteBot1
+	stop_server
+
+	# TNT again with Lithium's explosion raycast off: the claim must hold.
+	echo "mixin.world.explosions.block_raycast=false" >> run/config/lithium.properties
+	start_server
+	rcon "forceload add $((bx - 14)) $((bz - 14)) $((bx + 40)) $((bz + 14))" | sed "s/^/[goml] /" | tee -a "$REPORT"
+	sleep 5
+	tnt_raycast_off=$(tnt_test "$bx" "$y" "$((bz - 6))" "$((bz + 8))")
+	echo "[goml] TNT with Lithium's explosion raycast off: $tnt_raycast_off" | tee -a "$REPORT"
+	[ "$tnt_raycast_off" = "inside kept, outside broken" ] || fail "with Lithium's explosion raycast off: $tnt_raycast_off"
+	rcon "forceload remove all" > /dev/null
 	stop_server
 }
 
