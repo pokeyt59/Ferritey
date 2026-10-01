@@ -828,8 +828,12 @@ goml() {
 	out=$(water_probe "$((bx - 30))" "$y" "$bz")
 	echo "[goml] water before any claim: $out" | tee -a "$REPORT"
 	claim_at "$player" "$bx" "$y" "$bz"
+	out=$(water_probe "$((bx - 30))" "$y" "$((bz + 12))")
+	echo "[goml] water after the claim: $out" | tee -a "$REPORT"
 	stranger=$(bench_player "$((bx + 30))" "$bz")
 	[ -n "$stranger" ] || fail "no bench player to be the stranger"
+	out=$(water_probe "$((bx - 30))" "$y" "$((bz - 12))")
+	echo "[goml] water after a bench player joined: $out" | tee -a "$REPORT"
 
 	# Placing a block: the owner can, a stranger can't; outside, the stranger can.
 	rcon "ferrite bench players use $player $((bx + 3)) $y $((bz - 3)) minecraft:stone" \
@@ -846,6 +850,8 @@ goml() {
 	# recorded here, and checked again below with that Lithium mixin off.
 	tnt_lithium=$(tnt_test "$bx" "$y" "$((bz + 6))" "$((bz - 8))")
 	echo "[goml] TNT with Lithium's explosion raycast on: $tnt_lithium" | tee -a "$REPORT"
+	out=$(water_probe "$((bx - 30))" "$y" "$((bz - 24))")
+	echo "[goml] water after the TNT: $out" | tee -a "$REPORT"
 
 	# Water 2 blocks east of the claim's edge (x bx+10), and water far from
 	# the claim (the control: fluids tick here at all).
